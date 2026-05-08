@@ -161,6 +161,10 @@ export function mergeQuestUpdates(jsonText) {
     const updates = Array.isArray(parsed?.updates) ? parsed.updates : [];
     if (!updates.length) return;
 
+    const mods = settings.syspromptModules || {};
+    const isDeadlines = !!mods.questsDeadlines;
+    const isFrustration = !!mods.questsFrustration;
+
     let changed = false;
     for (const update of updates) {
         const quest = settings.quests.find(q => q.id === update.id);
@@ -168,7 +172,18 @@ export function mergeQuestUpdates(jsonText) {
         if (quest.status === 'failed') continue;
 
         if (update.status && ['active', 'completed', 'past deadline', 'failed'].includes(update.status)) {
-            quest.status = update.status;
+            let resolvedStatus = update.status;
+
+            // Frustration ON: deadline expiry → 'past deadline', not 'failed' (AI may get this wrong)
+            if (isFrustration && resolvedStatus === 'failed' && quest.deadline_time && quest.status === 'active') {
+                resolvedStatus = 'past deadline';
+            }
+            // Deadlines ON, Frustration OFF: 'past deadline' is invalid → promote to 'failed'
+            if (isDeadlines && !isFrustration && resolvedStatus === 'past deadline') {
+                resolvedStatus = 'failed';
+            }
+
+            quest.status = resolvedStatus;
             changed = true;
         }
 

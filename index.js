@@ -2741,15 +2741,18 @@ Rules:
 
         // Handle Quests Hardcore rules stripping
         if (!mods.questsDeadlines) {
+            // Strip deadline assignment rule and auto_fail guidance
             content = content.replace(/- Assign an in-world Deadline.*\n/g, '');
-            content = content.replace(/- Set auto_fail to true ONLY.*\n/g, '');
+            content = content.replace(/- Set auto_fail to true for quests.*\n/g, '');
         }
         if (!mods.questsFrustration) {
+            // Strip frustration coefficient and mood rules
             content = content.replace(/- Set a frustration_coefficient.*\n/g, '');
             content = content.replace(/ {2}· 0\.4 = Very patient.*\n/g, '');
             content = content.replace(/ {2}· 1\.0 = Normal.*\n/g, '');
             content = content.replace(/ {2}· 3\.0 = Volatile.*\n/g, '');
             content = content.replace(/- The NPC Mood evolves continuously.*\n/g, '');
+            // Also strip the 'past deadline' override rule — only applies when Frustration is active
             content = content.replace(/- If a quest is time-sensitive and the deadline passes.*\n/g, '');
         }
 

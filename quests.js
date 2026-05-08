@@ -185,7 +185,8 @@ export function registerLogQuestTool() {
         // In legacy mode or if quests are disabled in Narrator Config, no tool needed
         if (s.questLegacyMode || s.syspromptModules?.quests === false) return;
 
-        const isHardcore = !!s.questsHardcore;
+        const isDeadlines = !!s.syspromptModules?.questsDeadlines;
+        const isFrustration = !!s.syspromptModules?.questsFrustration;
 
         const properties = {
             title: { type: 'string', description: 'Clear, thematic name of the quest.' },
@@ -210,14 +211,21 @@ export function registerLogQuestTool() {
 
         const required = ['title', 'giver_name', 'giver_location', 'objectives'];
 
-        // Add simulation fields only if hardcore mode is enabled
-        if (isHardcore) {
-            properties.deadline_time = { type: 'string', description: 'Optional: When it must be done (e.g. "08:00 AM, Day 3").' };
+        // Add deadline fields only if Deadlines feature is enabled
+        if (isDeadlines) {
+            properties.deadline_time = { type: 'string', description: 'When the quest must be done (e.g. "08:00 PM, Day 3"). Required for time-sensitive quests.' };
+            if (!isFrustration) {
+                // Without Frustration, auto_fail is the mechanism for quest failure
+                properties.auto_fail = { type: 'boolean', description: 'If true, the quest status is set to "failed" when the deadline passes. Use true for hard deadlines, false for soft ones.' };
+            }
+        }
+
+        // Add frustration fields only if Frustration feature is enabled
+        if (isFrustration) {
             properties.frustration_coefficient = { 
                 type: 'number', 
-                description: 'Optional: How patient the NPC is. 0.4 = patient (75% frust at deadline), 3.0 = volatile (fail if overdue).' 
+                description: 'How patient the NPC is. 0.4 = very patient (starts pleased), 1.0 = normal, 3.0 = volatile (irritable well before the deadline). Default: 1.0.' 
             };
-            properties.auto_fail = { type: 'boolean', description: 'If true, the quest automatically fails if the deadline passes.' };
         }
 
         unregisterFunctionTool('LogQuest');
