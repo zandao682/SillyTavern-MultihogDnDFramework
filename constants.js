@@ -94,28 +94,32 @@ Example:
 'Last Rest' is ONLY triggered on Long Rest, NOT Short Rest (when Hit Dice, etc, are spent.) If the [TIME] delta between PREVIOUS STATE MEMO and your current update is only an hour, it is a Short Rest.`,
     xp: "Character Level and Experience Points (XP). Format as `Level: X | XP: current/max`. You MUST output this field whenever the narrative mentions gaining experience or leveling up.",
     quests: `Quest status updates ONLY. When a quest objective is completed or a quest concludes, emit a [QUESTS] block containing ONLY a JSON object with an "updates" array. Each entry must have the quest "id" and only the fields that changed: "status" (active/completed/failed) and/or "objectives" (array of {"id", "status"}). Do NOT emit quests with status "failed" — those are handled by the engine. Do NOT re-emit the full quest schema. If no quest changed, omit this block entirely.`,
-    quests_legacy: `Maintain the complete [QUESTS] block based on the narrator's output. You are the quest scribe — read the full narrative and emit a [QUESTS]...[/QUESTS] block that is always fully up to date.
+    quests_legacy: `Track quests using the [QUESTS] block. Maintain the COMPLETE list of all quests at all times — active, completed, and failed. Format each quest exactly as shown:
 
-Use this exact line-based format (indentation with spaces is optional but encouraged for readability):
-
-QUEST: <title>
-  ID: <stable ID — keep existing, or generate quest_<unix_ms> for new quests>
-  STATUS: active | completed | failed
-  GIVER: <giver name> @ <location>
-  ACCEPTED: <in-world time when accepted, e.g. "08:00 AM, Day 1">
-  DEADLINE: <in-world deadline, e.g. "06:00 PM, Day 4"> (omit line if none)
-  FRUSTRATION_COEFF: <float 0.4–3.0, based on NPC personality> (omit line if none)
-  OBJ_ACTIVE: <objective text> (required|optional)
-  OBJ_DONE: <objective text> (required|optional)
-  REWARD: <reward string>
+QUEST: The Missing Sheep
+  ID: quest_1746703200000
+  STATUS: active
+  GIVER: Farmer Hemwick @ Crestwood Mill
+  ACCEPTED: 08:00 AM, Day 1
+  DEADLINE: 06:00 PM, Day 4
+  FRUSTRATION_COEFF: 1.2
+  OBJ_ACTIVE: Find the missing sheep (required)
+  OBJ_ACTIVE: Search the eastern forest (optional)
+  OBJ_DONE: Talk to Hemwick (required)
+  REWARD: 50 gold
+  REWARD: Old family heirloom
 
 Rules:
-- Add a new QUEST block whenever the narrative shows the player formally accepting a task.
-- Change STATUS to completed or failed when the narrative resolves a quest.
-- Change OBJ_ACTIVE to OBJ_DONE when an objective is achieved.
-- Never delete quests — keep completed and failed quests with their updated STATUS.
-- Preserve IDs exactly — do NOT change an existing quest's ID.
-- If no quests exist or changed, emit [QUESTS][/QUESTS] (empty block).`,
+- ID: Invent quest_<unix_ms> for new quests. Never change an existing quest's ID.
+- STATUS: active | completed | failed. Update when the narrative resolves a quest.
+- GIVER: always "Name @ Location".
+- ACCEPTED: in-world time the player agreed to the quest (e.g. "08:00 AM, Day 1").
+- DEADLINE / FRUSTRATION_COEFF: omit these lines entirely if not applicable.
+- FRUSTRATION_COEFF: 0.4 (very patient) → 1.0 (normal) → 3.0 (volatile). Assign based on the NPC's personality.
+- OBJ_ACTIVE: a pending objective. OBJ_DONE: a completed one. Change ACTIVE→DONE when achieved.
+- REWARD: one line per reward item. Omit if none.
+- Never delete old quests. Keep completed/failed ones with updated STATUS.
+- If no quests exist yet, emit [QUESTS][/QUESTS] (empty).`,
 };
 
 // ── Embedded sysprompts — mobile/Termux fallback (fetch preferred, this is the safety net) ──
