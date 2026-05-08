@@ -65,9 +65,13 @@ import { registerLogQuestTool } from './quests.js';
             if (optionsDiv) optionsDiv.style.display = isEnabled ? 'flex' : 'none';
         }
 
-        // Hardcore Quests Sync
-        const hardcore = onboarding.querySelector('#rt_onboarding_quests_hardcore');
-        if (hardcore) hardcore.checked = !!s.questsHardcore;
+        // Deadlines Sync
+        const deadlines = onboarding.querySelector('#rt_onboarding_quests_deadlines');
+        if (deadlines) deadlines.checked = !!s.syspromptModules?.questsDeadlines;
+
+        // Frustration levels Sync
+        const frustration = onboarding.querySelector('#rt_onboarding_quests_frustration');
+        if (frustration) frustration.checked = !!s.syspromptModules?.questsFrustration;
 
         // Quest Processing Mode Sync
         const qmStandard = onboarding.querySelector('#rt_onboarding_quest_standard');
@@ -965,6 +969,29 @@ Rules:
         await Popup.show.confirm('🎲 RNG Systems Explained', popupBody, { okButton: 'Got it', cancelButton: false });
     }
 
+    /**
+     * Renders and shows the Quests Hardcore systems explanation popup.
+     */
+    async function showQuestsHardcoreExplanation() {
+        const { Popup } = SillyTavern.getContext();
+        const card = (icon, title, body) => `
+            <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; text-align: left;">
+                <div style="font-size: 1em; font-weight: bold; margin-bottom: 6px;">${icon} ${title}</div>
+                <div style="font-size: 0.9em; line-height: 1.5; opacity: 0.88;">${body}</div>
+            </div>`;
+        const popupBody = `
+            <div style="font-size: 0.9em; line-height: 1.5; max-width: 480px; text-align: left;">
+                ${card('⏳', 'Deadlines',
+                    `Deadlines add time-sensitive constraints to the State Tracker and modifies the system prompt to encourage NPCs to give deadlines. Quests will fail if the deadline is crossed. This makes time more of a factor with regard to quests. You can't simply take every task because you must manage that you can actually finish them. Also adds to immersion/realism.`
+                )}
+                ${card('🎭', 'Frustration Levels',
+                    `This is a highly experimental feature that adds a "frustration coefficient" to quest givers. This starts negative, meaning if you're actually very quick with finishing a quest, the NPC will be pleasantly surprised.<br><br>
+                    In this mode, quests don't actually fail if they go past their deadline; they just report "past deadline," which will cause the frustration of the quest giver to ramp up faster. You can still turn in the quest, but the reception probably won't be positive!`
+                )}
+            </div>`;
+        await Popup.show.confirm('📋 Quest Mechanics Explained', popupBody, { okButton: 'Got it', cancelButton: false });
+    }
+
     function bindRenderedCardEvents(el, memo, isDetachedContext = false, onRefresh = null) {
         const refresh = onRefresh || refreshRenderedView;
         el.querySelectorAll('.rt-random-char-btn').forEach(btn => {
@@ -999,6 +1026,14 @@ Rules:
             });
         });
 
+        // Hardcore Help Popup Triggers
+        el.querySelectorAll('.rt-quests-hardcore-help').forEach(icon => {
+            icon.addEventListener('click', (e) => {
+                e.stopPropagation();
+                showQuestsHardcoreExplanation();
+            });
+        });
+
         // --- Onboarding Narrator Configuration (Salad Bar Sync) ---
         const s = getSettings();
         
@@ -1025,15 +1060,23 @@ Rules:
             });
         }
 
-        // Hardcore Quests Sync
-        const onboardingHardcoreCb = el.querySelector('#rt_onboarding_quests_hardcore');
-        if (onboardingHardcoreCb) {
-            onboardingHardcoreCb.checked = !!s.questsHardcore;
-            onboardingHardcoreCb.addEventListener('change', () => {
-                const mainCb = document.getElementById('rpg_quests_hardcore');
-                if (mainCb) {
-                    $(mainCb).prop('checked', onboardingHardcoreCb.checked).trigger('change');
-                }
+        // Deadlines Sync
+        const onboardingDeadlinesCb = el.querySelector('#rt_onboarding_quests_deadlines');
+        if (onboardingDeadlinesCb) {
+            onboardingDeadlinesCb.checked = !!s.syspromptModules?.questsDeadlines;
+            onboardingDeadlinesCb.addEventListener('change', () => {
+                const mainCb = document.getElementById('rpg_quests_deadlines');
+                if (mainCb) $(mainCb).prop('checked', onboardingDeadlinesCb.checked).trigger('change');
+            });
+        }
+
+        // Frustration Levels Sync
+        const onboardingFrustrationCb = el.querySelector('#rt_onboarding_quests_frustration');
+        if (onboardingFrustrationCb) {
+            onboardingFrustrationCb.checked = !!s.syspromptModules?.questsFrustration;
+            onboardingFrustrationCb.addEventListener('change', () => {
+                const mainCb = document.getElementById('rpg_quests_frustration');
+                if (mainCb) $(mainCb).prop('checked', onboardingFrustrationCb.checked).trigger('change');
             });
         }
 
@@ -2697,15 +2740,17 @@ Rules:
             });
 
         // Handle Quests Hardcore rules stripping
-        if (!s.questsHardcore) {
+        if (!mods.questsDeadlines) {
             content = content.replace(/- Assign an in-world Deadline.*\n/g, '');
+            content = content.replace(/- Set auto_fail to true ONLY.*\n/g, '');
+        }
+        if (!mods.questsFrustration) {
             content = content.replace(/- Set a frustration_coefficient.*\n/g, '');
             content = content.replace(/ {2}· 0\.4 = Very patient.*\n/g, '');
             content = content.replace(/ {2}· 1\.0 = Normal.*\n/g, '');
             content = content.replace(/ {2}· 3\.0 = Volatile.*\n/g, '');
             content = content.replace(/- The NPC Mood evolves continuously.*\n/g, '');
             content = content.replace(/- If a quest is time-sensitive and the deadline passes.*\n/g, '');
-            content = content.replace(/- Set auto_fail to true ONLY.*\n/g, '');
         }
 
         return content
@@ -3452,31 +3497,66 @@ Rules:
                 }
             });
 
-            // Hardcore Quests toggle
-            const hardcoreQuestsCb = /** @type {HTMLInputElement} */ (document.getElementById('rpg_quests_hardcore'));
-            if (hardcoreQuestsCb) {
-                const s = getSettings();
-                hardcoreQuestsCb.checked = !!s.questsHardcore;
-                hardcoreQuestsCb.addEventListener('change', function () {
+            // Deadlines Toggle
+            const deadlinesCb = /** @type {HTMLInputElement} */ (document.getElementById('rpg_quests_deadlines'));
+            if (deadlinesCb) {
+                deadlinesCb.checked = !!getSettings().syspromptModules?.questsDeadlines;
+                deadlinesCb.addEventListener('change', function () {
                     const fresh = getSettings();
-                    fresh.questsHardcore = !!this.checked;
+                    if (!fresh.syspromptModules) fresh.syspromptModules = {};
+                    fresh.syspromptModules.questsDeadlines = !!this.checked;
                     
-                    // If in legacy mode, we need to refresh the module prompt to strip/add hardcore rules
+                    // Legacy prompt update
                     if (fresh.questLegacyMode) {
-                        let prompt = DEFAULT_STOCK_PROMPTS.quests_legacy;
-                        if (!fresh.questsHardcore) {
-                            prompt = prompt.replace(/  DEADLINE:.*\n/g, '');
-                            prompt = prompt.replace(/  FRUSTRATION_COEFF:.*\n/g, '');
-                            prompt = prompt.replace(/- DEADLINE \/ FRUSTRATION_COEFF:.*\n/g, '');
-                            prompt = prompt.replace(/- FRUSTRATION_COEFF:.*\n/g, '');
-                        }
-                        fresh.stockPrompts.quests = prompt;
+                        refreshQuestLegacyPrompt(fresh);
                         refreshOrderList();
                     }
-                    
-                    registerLogQuestTool();
                     saveSettings();
                 });
+            }
+
+            // Frustration Toggle
+            const frustrationCb = /** @type {HTMLInputElement} */ (document.getElementById('rpg_quests_frustration'));
+            if (frustrationCb) {
+                frustrationCb.checked = !!getSettings().syspromptModules?.questsFrustration;
+                frustrationCb.addEventListener('change', function () {
+                    const fresh = getSettings();
+                    if (!fresh.syspromptModules) fresh.syspromptModules = {};
+                    fresh.syspromptModules.questsFrustration = !!this.checked;
+                    
+                    // Legacy prompt update
+                    if (fresh.questLegacyMode) {
+                        refreshQuestLegacyPrompt(fresh);
+                        refreshOrderList();
+                    }
+                    saveSettings();
+                });
+            }
+
+            // Quests Help Trigger
+            $('#rt_quests_hardcore_help').on('click', (e) => {
+                e.stopPropagation();
+                showQuestsHardcoreExplanation();
+            });
+
+            function refreshQuestLegacyPrompt(s) {
+                let prompt = DEFAULT_STOCK_PROMPTS.quests_legacy;
+                if (!s.syspromptModules?.questsDeadlines && !s.syspromptModules?.questsFrustration) {
+                    prompt = prompt.replace(/  DEADLINE:.*\n/g, '');
+                    prompt = prompt.replace(/  FRUSTRATION_COEFF:.*\n/g, '');
+                    prompt = prompt.replace(/- DEADLINE \/ FRUSTRATION_COEFF:.*\n/g, '');
+                    prompt = prompt.replace(/- FRUSTRATION_COEFF:.*\n/g, '');
+                } else {
+                    if (!s.syspromptModules?.questsDeadlines) {
+                        prompt = prompt.replace(/  DEADLINE:.*\n/g, '');
+                        prompt = prompt.replace(/- DEADLINE.*\n/g, '');
+                    }
+                    if (!s.syspromptModules?.questsFrustration) {
+                        prompt = prompt.replace(/  FRUSTRATION_COEFF:.*\n/g, '');
+                        prompt = prompt.replace(/- FRUSTRATION_COEFF:.*\n/g, '');
+                    }
+                }
+                s.stockPrompts.quests = prompt;
             }
 
             // Quest Mode (Standard vs Legacy)

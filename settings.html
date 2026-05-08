@@ -51,9 +51,17 @@
                             <span>Enable Quests</span>
                         </label>
                         <div id="rpg_quests_options" class="flex-container flexFlowColumn gap-1" style="padding-left: 20px; display: none;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 2px;">
+                                <span style="font-size: 0.75em; opacity: 0.6; text-transform: uppercase; font-weight: bold;">Hardcore / Optional</span>
+                                <button id="rt_quests_hardcore_help" style="background: none; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: inherit; font-size: 0.72em; opacity: 0.7; padding: 0px 5px; cursor: pointer;" title="Explain hardcore quest mechanics">What are these?</button>
+                            </div>
                             <label class="checkbox_label">
-                                <input type="checkbox" id="rpg_quests_hardcore" />
-                                <span>Hardcore Quests (Deadlines, Frustration levels)</span>
+                                <input type="checkbox" id="rpg_quests_deadlines" />
+                                <span>Deadlines</span>
+                            </label>
+                            <label class="checkbox_label">
+                                <input type="checkbox" id="rpg_quests_frustration" />
+                                <span>Frustration levels</span>
                             </label>
                             <div class="flex-container flexFlowColumn gap-1" style="margin-top: 4px;">
                                 <div style="font-size: 0.75em; opacity: 0.6; text-transform: uppercase; font-weight: bold;">

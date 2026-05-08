@@ -127,7 +127,9 @@ You may be asked to use Markers: ((PLS)), ((B)), ((XB)), ((BDG)), ((HGT)). These
             loot: true,
             random_events: true,
             resting: true,
-            quests: true
+            quests: true,
+            questsDeadlines: false,
+            questsFrustration: false
         }
     };
 

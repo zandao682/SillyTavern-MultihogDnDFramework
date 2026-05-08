@@ -697,9 +697,17 @@ import { BLOCK_ICONS, BLOCK_ORDER, PAGE_SIZE, NO_PAGINATE } from './constants.js
                             <span>Enable Quests</span>
                         </label>
                         <div id="rt_onboarding_quest_options" style="padding-left: 20px; display: none; flex-direction: column; gap: 4px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 2px;">
+                                <span style="font-size: 0.75em; opacity: 0.6; text-transform: uppercase; font-weight: bold;">Hardcore / Optional</span>
+                                <button class="rt-quests-hardcore-help" style="background: none; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: inherit; font-size: 0.72em; opacity: 0.7; padding: 0px 5px; cursor: pointer;" title="Explain hardcore quest mechanics">What are these?</button>
+                            </div>
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" id="rt_onboarding_quests_hardcore" />
-                                <span>Hardcore Quests (Deadlines, Frustration levels)</span>
+                                <input type="checkbox" id="rt_onboarding_quests_deadlines" />
+                                <span>Deadlines</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="rt_onboarding_quests_frustration" />
+                                <span>Frustration levels</span>
                             </label>
                             <div style="margin-top: 4px; display: flex; flex-direction: column; gap: 4px;">
                                 <div style="font-size: 0.75em; opacity: 0.6; text-transform: uppercase; font-weight: bold;">
