@@ -712,6 +712,10 @@ Rules:
                 settings.prevMemo1 = sanitizedCurrent;
                 settings.currentMemo = merged;
 
+                // Sync internal quest objects from the merged memo
+                // (handles Legacy plain-text [QUESTS] blocks written by the state model)
+                syncQuestsFromMemo(merged);
+
                 updateUIMemo(merged);
                 syncMemoView();
                 refreshRenderedView();

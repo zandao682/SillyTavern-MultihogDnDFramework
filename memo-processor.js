@@ -331,21 +331,36 @@ export function parseQuestsFromText(text) {
         const coeff = rawCoeff ? parseFloat(rawCoeff) : null;
 
         // Objectives: OBJ_ACTIVE or OBJ_DONE lines
+        // Robust: handles both one-per-line and comma-separated objectives on a single line
         const objectives = [];
         const objRe = /^\s*(OBJ_ACTIVE|OBJ_DONE):\s*(.+)$/gmi;
         let objMatch;
         let objIdx = 0;
         while ((objMatch = objRe.exec(block)) !== null) {
             const isDone  = objMatch[1].toUpperCase() === 'OBJ_DONE';
-            const content = objMatch[2].trim();
-            const isOptional = /\(optional\)$/i.test(content);
-            const objText = content.replace(/\s*\((required|optional)\)\s*$/i, '').trim();
-            objectives.push({
-                id:       `obj_${objIdx++}`,
-                text:     objText,
-                required: !isOptional,
-                status:   isDone ? 'completed' : 'active',
-            });
+            const rawContent = objMatch[2].trim();
+
+            // Detect comma-separated objectives: "Obj one (required), Obj two (optional)"
+            // A comma-separated list will have "(required)" or "(optional)" mid-string
+            const hasInlineMarkers = /\)\s*,/.test(rawContent);
+
+            const parts = hasInlineMarkers
+                ? rawContent.split(/,\s*(?=\S)/)   // split on ", " boundaries
+                : [rawContent];
+
+            for (const part of parts) {
+                const p = part.trim();
+                if (!p) continue;
+                const isOptional = /\(optional\)$/i.test(p);
+                const objText = p.replace(/\s*\((required|optional)\)\s*$/i, '').trim();
+                if (!objText) continue;
+                objectives.push({
+                    id:       `obj_${objIdx++}`,
+                    text:     objText,
+                    required: !isOptional,
+                    status:   isDone ? 'completed' : 'active',
+                });
+            }
         }
 
         // Rewards: REWARD lines
