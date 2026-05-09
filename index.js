@@ -4,7 +4,7 @@ import { sendStateRequest, fetchOllamaModels, fetchOpenAIModels, testOpenAIConne
 import { getDiceToolName, getDiceCommandName, getDiceCommandAliases, doDiceRoll, registerDiceFunctionTool, registerDiceSlashCommand, installInterceptor, getNarrativeBlocks, onGenerationEnded } from './narrative-hooks.js';
 import { deduplicateMemo, mergeMemo, computeDelta, escapeHtml, escapeRegex, highlightParens, cleanToolCallMessage, getLastUserAction, buildLorebookContext, buildModulesInstructionText, buildModuleFormatInstruction, syncQuestsFromMemo, syncQuestsToMemo } from './memo-processor.js';
 import { renderSubFieldByRule, tryRenderMarker, renderCustomBlockLine, stripMemoHtml, escapeHtmlWithColor, parseMemoBlocks, getPageSize, loadCollapsed, saveCollapsed, loadDetached, saveDetached, blockToItems, renderMemoAsCards, renderQuestLog } from './renderer.js';
-import { registerLogQuestTool } from './quests.js';
+import { registerLogQuestTool, checkQuestDeadlines } from './quests.js';
 
     // Capture the folder name dynamically from the module URL so it works regardless of what the user names the folder
     const FOLDER_NAME = (function () {
@@ -587,6 +587,10 @@ Rules:
      */
     async function runStateModelPass(narrativeOutput, isFullContext = false, overrideLookback = null) {
         const settings = getSettings();
+        
+        // Deterministic logic: Auto-fail quests past deadline (if not using frustration)
+        checkQuestDeadlines();
+
         const { generateRaw } = SillyTavern.getContext();
 
         if (!generateRaw) {

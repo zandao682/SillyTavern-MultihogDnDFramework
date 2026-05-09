@@ -204,9 +204,9 @@ export function registerLogQuestTool() {
             toolDescription +=
                 ' If the quest is time-sensitive, you MUST calculate and supply deadline_time in the format "HH:MM AM/PM, Day N". ' +
                 (isFrustration
-                    ? 'Do NOT set auto_fail when Frustration is enabled — the frustration_coefficient handles consequences instead. ' +
+                    ? 'The NPC Mood evolves continuously based on frustration_coefficient. ' +
                       'Reserve status "failed" only for quests that are logically impossible to complete or explicitly called off by the NPC.'
-                    : 'Set auto_fail to true for hard deadlines (NPC will not accept a late delivery), false for soft ones.');
+                    : 'The quest will automatically fail if the current time passes the deadline.');
         }
 
         if (isFrustration) {
@@ -264,15 +264,7 @@ export function registerLogQuestTool() {
                     'If the narrative specifies a duration (e.g., "four days"), you MUST calculate the absolute Day N timestamp based on the current time. ' +
                     'Omit only if the quest has no time pressure whatsoever.'
             };
-            if (!isFrustration) {
-                properties.auto_fail = {
-                    type: 'boolean',
-                    description:
-                        'True = hard deadline: quest automatically fails when the deadline passes. ' +
-                        'False = soft deadline: the NPC will still accept the quest late, though they may be displeased. ' +
-                        'Default: false. Only set to true when the NPC made clear the timing is non-negotiable.'
-                };
-            }
+            // Removed auto_fail property - now deterministic based on isFrustration toggle
         }
 
         if (isFrustration) {
@@ -324,7 +316,7 @@ export function registerLogQuestTool() {
                     rewards: args.rewards || [],
                     deadline_time: isDeadlines ? (args.deadline_time || null) : undefined,
                     frustration_coefficient: isFrustration ? (args.frustration_coefficient || 1.0) : undefined,
-                    auto_fail: (isDeadlines && !isFrustration) ? (args.auto_fail !== false) : undefined,
+                    auto_fail: (isDeadlines && !isFrustration),
                     accepted_time: acceptedTime,
                     status: 'active'
                 };
