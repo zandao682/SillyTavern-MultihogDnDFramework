@@ -1237,8 +1237,58 @@ Rules:
             onboardingApplyBtn.addEventListener('click', async (e) => {
                 e.preventDefault();
                 
-                // Fetch and apply sysprompt without resetting tracker state/modules
-                const fileName = getSettings().diceFunctionTool ? 'sysprompt.txt' : 'sysprompt_legacy.txt';
+                const s = getSettings();
+
+                // ── CRITICAL: Sync all onboarding UI states to settings before building ──
+                // This ensures the "Apply" button respects what the user sees, even if
+                // event listeners were delayed or missed.
+                
+                // RNG Mode
+                const rngHybrid = /** @type {HTMLInputElement|null} */ (el.querySelector('#rt_onboarding_rng_hybrid'));
+                if (rngHybrid) s.diceFunctionTool = !!rngHybrid.checked;
+
+                // Quests & Modules
+                const questsCb = /** @type {HTMLInputElement|null} */ (el.querySelector('#rt_onboarding_quests_enabled'));
+                if (questsCb) {
+                    if (!s.syspromptModules) s.syspromptModules = {};
+                    s.syspromptModules.quests = !!questsCb.checked;
+                }
+                const deadlinesCb = /** @type {HTMLInputElement|null} */ (el.querySelector('#rt_onboarding_quests_deadlines'));
+                if (deadlinesCb) {
+                    if (!s.syspromptModules) s.syspromptModules = {};
+                    s.syspromptModules.questsDeadlines = !!deadlinesCb.checked;
+                }
+                const frustrationCb = /** @type {HTMLInputElement|null} */ (el.querySelector('#rt_onboarding_quests_frustration'));
+                if (frustrationCb) {
+                    if (!s.syspromptModules) s.syspromptModules = {};
+                    s.syspromptModules.questsFrustration = !!frustrationCb.checked;
+                }
+                const qmLegacy = /** @type {HTMLInputElement|null} */ (el.querySelector('#rt_onboarding_quest_legacy'));
+                if (qmLegacy) s.questLegacyMode = !!qmLegacy.checked;
+
+                // Optional Modules
+                const modKeys = { '#rt_onboarding_mod_loot': 'loot', '#rt_onboarding_mod_random_events': 'random_events', '#rt_onboarding_mod_resting': 'resting' };
+                for (const [id, key] of Object.entries(modKeys)) {
+                    const cb = /** @type {HTMLInputElement|null} */ (el.querySelector(id));
+                    if (cb) {
+                        if (!s.syspromptModules) s.syspromptModules = {};
+                        s.syspromptModules[key] = !!cb.checked;
+                    }
+                }
+
+                // Run specific logic updates
+                if (s.questLegacyMode) {
+                    refreshQuestLegacyPrompt(s);
+                } else {
+                    if (!s.stockPrompts) s.stockPrompts = { ...DEFAULT_STOCK_PROMPTS };
+                    s.stockPrompts.quests = DEFAULT_STOCK_PROMPTS.quests;
+                    registerLogQuestTool();
+                }
+                refreshOrderList();
+                saveSettings();
+
+                // ── Proceed with Sysprompt construction ──
+                const fileName = s.diceFunctionTool ? 'sysprompt.txt' : 'sysprompt_legacy.txt';
                 let content;
                 try {
                     const response = await fetch(`/scripts/extensions/third-party/${FOLDER_NAME}/${fileName}`);

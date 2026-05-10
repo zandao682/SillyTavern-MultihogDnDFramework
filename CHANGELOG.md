@@ -2,6 +2,14 @@
 
 All notable changes to the **Fatbody D&D Framework** will be documented in this file.
 
+## [1.8.16] - 2026-05-10
+
+**Fix: Hardened "Apply Sysprompt" Logic**
+Fixed a bug where clicking "Apply Sysprompt Now" in the onboarding menu could occasionally result in a stale prompt if intermediate toggle events were missed.
+
+### Fixed
+- **Atomic Onboarding Apply**: The "Apply" button now performs a full scrape of all UI toggles (Deadlines, Frustration, Quest Mode, RNG Mode) immediately before generating the prompt. This guarantees the resulting sysprompt and module instructions perfectly match the visible UI state.
+
 ## [1.8.15] - 2026-05-10
 
 **Enhancement: Legacy Quest Rewards**
