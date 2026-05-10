@@ -3687,10 +3687,8 @@ Rules:
                 // Re-merge defaults
                 const finalSettings = getSettings();
                 
-                // If legacy mode is on, re-apply the legacy quest prompt with current toggle state
-                if (finalSettings.questLegacyMode) {
-                    refreshQuestLegacyPrompt(finalSettings);
-                }
+                // If legacy mode is on, the prompt is applied at runtime by buildModulesInstructionText
+                // (no explicit call needed)
                 
                 refreshOrderList();
                 saveSettings();
@@ -3834,12 +3832,10 @@ Rules:
                     
                     if (fresh.questLegacyMode) {
                         if (!fresh.stockPrompts) fresh.stockPrompts = {};
-                        if (!fresh._questToolPromptBackup) fresh._questToolPromptBackup = fresh.stockPrompts.quests;
-                        
-                        // Apply current deadline/frustration toggle state to the legacy prompt
-                        refreshQuestLegacyPrompt(fresh);
+                        // Legacy prompt is applied at runtime by buildModulesInstructionText
                     } else {
-                        fresh.stockPrompts.quests = fresh._questToolPromptBackup ?? DEFAULT_STOCK_PROMPTS.quests;
+                        // Always restore from canonical default — never trust a stale backup
+                        fresh.stockPrompts.quests = DEFAULT_STOCK_PROMPTS.quests;
                         delete fresh._questToolPromptBackup;
                     }
                     refreshOrderList();
