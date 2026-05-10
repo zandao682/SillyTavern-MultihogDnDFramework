@@ -2,6 +2,14 @@
 
 All notable changes to the **Fatbody D&D Framework** will be documented in this file.
 
+## [1.8.21] - 2026-05-10
+
+**Enhancement: RNG Queue Guidance**
+Added explicit clarification to the legacy system prompt regarding RNG queue entry consumption.
+
+### Changed
+- **Prompt Guidance**: Explicitly stated that the first number in each RNG queue entry represents the d20 result in the legacy system prompt.
+
 ## [1.8.20] - 2026-05-10
 
 **Enhancement: Robust Difficulty Parsing**
