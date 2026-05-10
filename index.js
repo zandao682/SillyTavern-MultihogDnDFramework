@@ -3093,6 +3093,9 @@ Rules:
                 if (changed) {
                     saveSettings();
                 }
+
+                // Diagnostic: log the quest mode state at init to help diagnose prompt routing issues
+                console.log(`[RPG Tracker] Quest mode at init: questLegacyMode=${settings.questLegacyMode}, stockPrompts.quests type=${settings.stockPrompts.quests?.includes?.('updates') ? 'MODERN/JSON' : settings.stockPrompts.quests?.includes?.('OBJ_ACTIVE') ? 'LEGACY' : 'UNKNOWN'}`);
             }
 
             $('#rpg_tracker_enabled').prop('checked', settings.enabled).on('change', function () {

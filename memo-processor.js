@@ -755,20 +755,27 @@ export function buildModulesInstructionText(settings) {
 
     modulesText += "### CORE MODULES\n";
     for (const [key, prompt] of Object.entries(promptsMap)) {
+        // Never emit the quests_legacy key as its own module — it's a data slot only
+        if (key === 'quests_legacy') continue;
+
         if (settings.modules[key]) {
             let p = prompt;
 
             // ── Dynamic prompt swap for Legacy Quests ──────────────────────
-            if (key === 'quests' && settings.questLegacyMode) {
-                const isDeadlines = !!settings.syspromptModules?.questsDeadlines;
-                const isFrustration = !!settings.syspromptModules?.questsFrustration;
-                // Use the dedicated legacy format prompt
-                p = (promptsMap['quests_legacy'] || DEFAULT_STOCK_PROMPTS.quests_legacy);
-                if (!isDeadlines) p = p.replace(/\n\s*DEADLINE:.*?\n/g, '\n');
-                if (!isFrustration) p = p.replace(/\n\s*FRUSTRATION_COEFF:.*?\n/g, '\n');
+            if (key === 'quests') {
+                const useLegacy = !!settings.questLegacyMode;
+                if (useLegacy) {
+                    const isDeadlines = !!settings.syspromptModules?.questsDeadlines;
+                    const isFrustration = !!settings.syspromptModules?.questsFrustration;
+                    // Use the dedicated legacy format prompt
+                    p = (promptsMap['quests_legacy'] || DEFAULT_STOCK_PROMPTS.quests_legacy);
+                    if (!isDeadlines) p = p.replace(/\n\s*DEADLINE:.*?\n/g, '\n');
+                    if (!isFrustration) p = p.replace(/\n\s*FRUSTRATION_COEFF:.*?\n/g, '\n');
+                    console.log('[RPG Tracker] Quest prompt: using LEGACY format (questLegacyMode=true)');
+                } else {
+                    console.log('[RPG Tracker] Quest prompt: using MODERN/JSON format (questLegacyMode=false)');
+                }
             }
-            // Never emit the quests_legacy key as its own module — it's injected via the quests key above
-            if (key === 'quests_legacy') continue;
 
             modulesText += `- [${key.toUpperCase()}]: ${p}\n`;
         }
