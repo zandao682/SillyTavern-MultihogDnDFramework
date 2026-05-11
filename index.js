@@ -4346,7 +4346,15 @@ Rules:
             $('.rpg-tracker-settings').on('click', '.inline-drawer-toggle', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                $(this).closest('.inline-drawer').find('> .inline-drawer-content').stop().slideToggle();
+                const drawer = $(this).closest('.inline-drawer');
+                drawer.toggleClass('open');
+                // Ensure the content is visible when open, even if ST defaults vary
+                const content = drawer.find('> .inline-drawer-content');
+                if (drawer.hasClass('open')) {
+                    content.show();
+                } else {
+                    content.hide();
+                }
                 $(this).find('.inline-drawer-icon').toggleClass('down');
             });
 
