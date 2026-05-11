@@ -335,7 +335,7 @@ Thought: I see a new NPC named Barnaby. I will record him.
  * Applies the agent's final decision to settings and lorebooks.
  * @param {object} action - The action to apply.
  * @param {object} allBooks - The cached archive books for verification.
- * @returns {Promise<{success: boolean, errors: string[]}>}
+ * @returns {Promise<{success: boolean, errors: string[], recordedIds: string[]}>}
  */
 async function applyAction(action, allBooks = {}) {
     const settings = getSettings();
