@@ -344,6 +344,10 @@ async function applyAction(action, allBooks = {}) {
     const errors = [];
     const allBookNames = Object.keys(allBooks);
 
+    const timeMatch = settings.currentMemo?.match(/\[TIME\]([\s\S]*?)\[\/TIME\]/i);
+    const currentTime = timeMatch ? timeMatch[1].trim() : '';
+    const timePrefix = currentTime ? `[${currentTime}] ` : '';
+
     // 1. Activate/Deactivate
     const activate = action.activate || [];
     const deactivate = action.deactivate || [];
@@ -378,7 +382,11 @@ async function applyAction(action, allBooks = {}) {
         const [bookName, uid] = up.id.split('::');
         const book = await ctx.loadWorldInfo(bookName);
         if (book?.entries?.[uid]) {
-            book.entries[uid].content = up.content;
+            let newContent = up.content;
+            if (timePrefix && !newContent.includes('[Day')) {
+                newContent = timePrefix + newContent;
+            }
+            book.entries[uid].content = newContent;
             await ctx.saveWorldInfo(bookName, book);
             changed = true;
         }
@@ -398,19 +406,24 @@ async function applyAction(action, allBooks = {}) {
         else if (cat.includes('FAC')) targetBook = prefix ? `${prefix}_Factions` : 'Factions';
         else if (cat.includes('EVENT')) {
             targetBook = prefix ? `${prefix}_Events` : 'Events';
-            const timeMatch = settings.currentMemo?.match(/\[TIME\]([\s\S]*?)\[\/TIME\]/i);
-            const currentTime = timeMatch ? timeMatch[1].trim() : '';
             if (currentTime && !rec.label.includes('[Day')) {
                 rec.label = `[${currentTime}] ${rec.label}`;
             }
+        }
+
+        // Apply temporal content tagging to ALL records
+        if (timePrefix && !rec.content.includes('[Day')) {
+            rec.content = timePrefix + rec.content;
         }
 
         // DEDUPLICATION: Check if an entry with this label already exists in the target book
         let existingUid = null;
         const targetBookData = allBooks[targetBook];
         if (targetBookData?.entries) {
+            const cleanLabel = (rec.label || '').replace(/^\[Day[^\]]+\]\s*/i, '').toLowerCase().trim();
             for (const [uid, entry] of Object.entries(targetBookData.entries)) {
-                if ((entry.comment || '').toLowerCase() === (rec.label || '').toLowerCase()) {
+                const entryLabel = (entry.comment || '').replace(/^\[Day[^\]]+\]\s*/i, '').toLowerCase().trim();
+                if (entryLabel === cleanLabel) {
                     existingUid = uid;
                     break;
                 }
