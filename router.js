@@ -419,7 +419,9 @@ async function applyAction(action, allBooks = {}, currentTime = '', breadcrumb =
             if (timePrefix && !newContent.includes('[Day')) {
                 newContent = timePrefix + newContent;
             }
-            book.entries[uid].content = newContent;
+            // Strip any model-echoed ID header, then re-stamp the canonical one
+            newContent = newContent.replace(/^\[ID:[^\]]+\]\n?/i, '');
+            book.entries[uid].content = `[ID: ${up.id}]\n${newContent}`;
             await ctx.saveWorldInfo(bookName, book);
             changed = true;
         }
@@ -496,30 +498,33 @@ async function applyAction(action, allBooks = {}, currentTime = '', breadcrumb =
             }
 
             if (existingUid) {
-                // Update in-memory
-                bookData.entries[existingUid].content = rec.content;
+                // Update in-memory — strip any stale ID header then re-stamp it
+                const fullId = `${targetBook}::${existingUid}`;
+                const strippedContent = (rec.content || '').replace(/^\[ID:[^\]]+\]\n?/i, '');
+                bookData.entries[existingUid].content = `[ID: ${fullId}]\n${strippedContent}`;
                 const keys = bookData.entries[existingUid].key || [];
                 (rec.keys || []).forEach(k => { if (!keys.includes(k)) keys.push(k); });
                 bookData.entries[existingUid].key = cleanKeys(keys);
-                const fullId = `${targetBook}::${existingUid}`;
                 if (!newActive.includes(fullId)) newActive.push(fullId);
                 recordedIds.push(`${fullId} (updated)`);
             } else {
                 // Append new entry with the next sequential UID
                 const uids = Object.keys(bookData.entries).map(Number).filter(n => !isNaN(n));
                 const nextUid = uids.length > 0 ? Math.max(...uids) + 1 : 0;
+                const fullId = `${targetBook}::${nextUid}`;
+                // Stamp the entry ID into content so the model can reference it when updating
+                const stampedContent = `[ID: ${fullId}]\n${rec.content || ''}`;
                 bookData.entries[nextUid] = {
                     uid: nextUid,
                     key: rec.keys || [rec.label],
                     keysecondary: [],
                     comment: rec.label || 'LORE_GEN',
-                    content: rec.content,
+                    content: stampedContent,
                     constant: false, selective: false, selectiveLogic: 0, addMemo: true,
                     order: 100, position: 0, disable: false,
                     probability: 100, useProbability: false,
                     depth: 4, group: '', groupOverride: false, groupWeight: 100,
                 };
-                const fullId = `${targetBook}::${nextUid}`;
                 if (!newActive.includes(fullId)) newActive.push(fullId);
                 recordedIds.push(fullId);
             }
