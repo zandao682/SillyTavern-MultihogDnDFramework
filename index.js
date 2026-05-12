@@ -1,7 +1,7 @@
 import { EXAMPLES, COLOR_EXAMPLES, DEFAULT_STOCK_PROMPTS, RT_PROMPTS, BLOCK_ICONS, BLOCK_ORDER, PAGE_SIZE, NO_PAGINATE, QUESTS_NARRATOR_MODERN, QUESTS_NARRATOR_LEGACY } from './constants.js';
 import { MODULE_NAME, DEFAULT_MODULES, getSettings, getBarBackground, migrateCustomFields, saveChatState, saveProfile, deleteProfile } from './state-manager.js';
 import { sendStateRequest, fetchOllamaModels, fetchOpenAIModels, testOpenAIConnection, getConnectionProfiles, getCurrentCompletionPreset, setCompletionPreset } from './llm-client.js';
-import { getDiceToolName, getDiceCommandName, getDiceCommandAliases, doDiceRoll, registerDiceFunctionTool, registerDiceSlashCommand, installInterceptor, getNarrativeBlocks, onGenerationEnded } from './narrative-hooks.js';
+import { getDiceToolName, getDiceCommandName, getDiceCommandAliases, doDiceRoll, registerDiceFunctionTool, registerDiceSlashCommand, installInterceptor, getNarrativeBlocks, onGenerationEnded, resetRouterTick } from './narrative-hooks.js';
 import { deduplicateMemo, mergeMemo, computeDelta, escapeHtml, escapeRegex, highlightParens, cleanToolCallMessage, getLastUserAction, buildLorebookContext, buildModulesInstructionText, buildModuleFormatInstruction, parseQuestsFromMemo, syncQuestsFromMemo, syncQuestsToMemo, writeQuestsToMemo, getQuestMood } from './memo-processor.js';
 import { renderSubFieldByRule, tryRenderMarker, renderCustomBlockLine, stripMemoHtml, escapeHtmlWithColor, parseMemoBlocks, getPageSize, loadCollapsed, saveCollapsed, loadDetached, saveDetached, blockToItems, renderMemoAsCards, renderQuestLog, renderLorebookTerminal } from './renderer.js';
 import { registerLogQuestTool, checkQuestDeadlines } from './quests.js';
@@ -327,6 +327,9 @@ import { runRouterPass, rollbackRouterPass, reapplyRouterPass, getLorebookManife
 
         const oldChatId = _currentChatId;
         _currentChatId  = newChatId || null;
+
+        // Reset the run-every tick so the agent fires promptly on the first generation of each chat
+        resetRouterTick();
 
         if (!s.chatLinkEnabled) {
             updateChatLinkUI();
@@ -2030,6 +2033,7 @@ Rules:
                     <span class="rpg-tracker-header-left"><i class="fa-solid fa-robot"></i> Lorebook Agent</span>
                     <div class="rpg-tracker-header-right">
                         <button class="rpg-tracker-icon-btn" id="rt-agent-router-manual-run" title="Run Research Now" style="color: var(--rt-accent);"><i class="fa-solid fa-play"></i></button>
+                        <button class="rpg-tracker-icon-btn" id="rt-agent-router-pause-btn" title="${settings.routerPaused ? 'Resume Agent (auto-runs paused)' : 'Pause Agent (skip auto-runs)'}" style="${settings.routerPaused ? 'color:#ffa500;' : ''}">${settings.routerPaused ? '▶' : '⏸'}</button>
                         <button class="rpg-tracker-icon-btn" id="rt-agent-router-detach" title="Detach Lorebook Agent">⧉</button>
                         <button class="rpg-tracker-icon-btn" id="rpg-tracker-agent-close" title="Close">✕</button>
                     </div>
@@ -2054,10 +2058,17 @@ Rules:
                         <input type="checkbox" id="rt-agent-router-basic" ${settings.routerBasicMode ? 'checked' : ''}>
                     </label>
 
-                    <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 10px;" title="Main Lookback: How many recent messages the agent analyzes during automatic passes.">
-                        <span style="font-size: 0.769em; opacity: 0.7;">Main Lookback:</span>
-                        <input type="number" id="rt-agent-router-lookback" value="${settings.routerLookback || 3}" min="1" max="100" style="width: 40px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: white; border-radius: 3px; text-align: center; font-size: 0.769em; padding: 1px;">
-                        <span style="font-size: 0.769em; opacity: 0.5;">msgs</span>
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <div style="display: flex; align-items: center; gap: 6px; flex: 1;" title="Main Lookback: How many recent messages the agent analyzes during automatic passes.">
+                            <span style="font-size: 0.769em; opacity: 0.7;">Lookback:</span>
+                            <input type="number" id="rt-agent-router-lookback" value="${settings.routerLookback || 3}" min="1" max="100" style="width: 40px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: white; border-radius: 3px; text-align: center; font-size: 0.769em; padding: 1px;">
+                            <span style="font-size: 0.769em; opacity: 0.5;">msgs</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 6px; flex: 1;" title="Run every N messages: The agent only fires an auto-pass once per N AI responses. Higher = fewer runs, fewer tokens. Manual runs always fire immediately.">
+                            <span style="font-size: 0.769em; opacity: 0.7;">Run every:</span>
+                            <input type="number" id="rt-agent-router-run-every" value="${settings.routerRunEvery || 1}" min="1" max="50" style="width: 40px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: white; border-radius: 3px; text-align: center; font-size: 0.769em; padding: 1px;">
+                            <span style="font-size: 0.769em; opacity: 0.5;">msgs</span>
+                        </div>
                     </div>
 
                     <div style="display: flex; gap: 8px; margin-bottom: 10px;">
@@ -2816,6 +2827,69 @@ Rules:
                     }
                 });
             }
+
+            // ── Pick prefix from existing world info books ──
+            const prefixPickBtn = panel.querySelector('#rpg_tracker_router_prefix_pick');
+            if (prefixPickBtn && prefixInput) {
+                prefixPickBtn.addEventListener('click', async () => {
+                    const ctx = SillyTavern.getContext();
+                    if (typeof ctx.updateWorldInfoList === 'function') {
+                        try { await ctx.updateWorldInfoList(); } catch (_) {}
+                    }
+                    let allNames = [];
+                    if (typeof ctx.getWorldInfoNames === 'function') {
+                        try { allNames = await ctx.getWorldInfoNames(); } catch (_) {}
+                    }
+                    if (!allNames.length) {
+                        toastr['info']('No world info books found.', 'Lorebook Agent');
+                        return;
+                    }
+                    // Build unique root prefixes: the part before the first "_" (or the full name)
+                    const roots = [...new Set(allNames.map(n => {
+                        const idx = n.indexOf('_');
+                        return idx > 0 ? n.slice(0, idx) : n;
+                    }))].sort();
+
+                    // Build an inline floating dropdown
+                    const existing = document.getElementById('rt-prefix-pick-dropdown');
+                    if (existing) existing.remove();
+
+                    const dropdown = document.createElement('div');
+                    dropdown.id = 'rt-prefix-pick-dropdown';
+                    dropdown.style.cssText = 'position:absolute; z-index:99999; background:#1e1e2e; border:1px solid rgba(255,255,255,0.15); border-radius:6px; padding:4px 0; max-height:240px; overflow-y:auto; min-width:180px; box-shadow:0 4px 16px rgba(0,0,0,0.5);';
+
+                    roots.forEach(r => {
+                        const item = document.createElement('div');
+                        item.textContent = r;
+                        item.style.cssText = 'padding:6px 12px; cursor:pointer; font-size:0.9em; color:#ddd;';
+                        item.addEventListener('mouseenter', () => { item.style.background = 'rgba(255,255,255,0.08)'; });
+                        item.addEventListener('mouseleave', () => { item.style.background = ''; });
+                        item.addEventListener('click', () => {
+                            const s = getSettings();
+                            s.routerCampaignPrefix = r;
+                            prefixInput.value = r;
+                            saveSettings();
+                            if (s.chatLinkEnabled && _currentChatId) saveChatState(_currentChatId);
+                            dropdown.remove();
+                            toastr['success'](`Campaign prefix set to "${r}"`, 'Lorebook Agent');
+                        });
+                        dropdown.appendChild(item);
+                    });
+
+                    const btnRect = /** @type {HTMLElement} */ (prefixPickBtn).getBoundingClientRect();
+                    dropdown.style.top = (btnRect.bottom + window.scrollY + 4) + 'px';
+                    dropdown.style.left = (btnRect.left + window.scrollX) + 'px';
+                    document.body.appendChild(dropdown);
+
+                    const closeOnOutsideClick = (/** @type {MouseEvent} */ ev) => {
+                        if (!dropdown.contains(/** @type {Node} */ (ev.target))) {
+                            dropdown.remove();
+                            document.removeEventListener('click', closeOnOutsideClick, true);
+                        }
+                    };
+                    setTimeout(() => document.addEventListener('click', closeOnOutsideClick, true), 0);
+                });
+            }
             
             const sourceSel = /** @type {HTMLSelectElement} */ (agentPanel.querySelector('#rt-agent-router-source'));
             const profGrp = /** @type {HTMLElement} */ (agentPanel.querySelector('#rt-agent-router-profile-group'));
@@ -2869,6 +2943,35 @@ Rules:
                 });
             }
 
+            // ── Run-every counter ──
+            const runEveryInput = /** @type {HTMLInputElement} */ (agentPanel.querySelector('#rt-agent-router-run-every'));
+            if (runEveryInput) {
+                runEveryInput.addEventListener('change', (e) => {
+                    const s = getSettings();
+                    s.routerRunEvery = parseInt((/** @type {HTMLInputElement} */ (e.target)).value) || 1;
+                    saveSettings();
+                });
+            }
+
+            // ── Agent pause button ──
+            const agentPauseBtn = agentPanel.querySelector('#rt-agent-router-pause-btn');
+            if (agentPauseBtn) {
+                agentPauseBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const s = getSettings();
+                    s.routerPaused = !s.routerPaused;
+                    saveSettings();
+                    agentPauseBtn.textContent = s.routerPaused ? '▶' : '⏸';
+                    /** @type {HTMLElement} */ (agentPauseBtn).title = s.routerPaused
+                        ? 'Resume Agent (auto-runs paused)'
+                        : 'Pause Agent (skip auto-runs)';
+                    /** @type {HTMLElement} */ (agentPauseBtn).style.color = s.routerPaused ? '#ffa500' : '';
+                    if (s.routerPaused) {
+                        toastr['info']('Lorebook Agent paused — manual runs still work.', 'Lorebook Agent');
+                    }
+                });
+            }
+
             const runDirectBtn = agentPanel.querySelector('#rt-agent-router-run-direct');
             if (runDirectBtn) {
                 runDirectBtn.addEventListener('click', async (e) => {
@@ -2882,7 +2985,7 @@ Rules:
                     const { chat } = SillyTavern.getContext();
                     const combinedNarrative = getNarrativeBlocks(chat, -1);
                     toastr['info'](prompt ? "Running agent with specific command..." : "Starting manual research pass...");
-                    await runRouterPass(combinedNarrative, prompt, lookback);
+                    await runRouterPass(combinedNarrative, prompt, lookback, true);
                 });
             }
 
@@ -2894,7 +2997,7 @@ Rules:
                     const { chat } = SillyTavern.getContext();
                     const combinedNarrative = getNarrativeBlocks(chat, -1);
                     toastr['info']("Starting manual research pass...");
-                    await runRouterPass(combinedNarrative, null, s.routerLookback || 3);
+                    await runRouterPass(combinedNarrative, null, s.routerLookback || 3, true);
                 });
             }
 

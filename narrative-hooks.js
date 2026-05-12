@@ -211,7 +211,7 @@ export function registerDiceSlashCommand() {
             if (val === 'run' || val === 'research') {
                 const { chat } = SillyTavern.getContext();
                 const combinedNarrative = getNarrativeBlocks(chat, -1);
-                await runRouterPass(combinedNarrative);
+                await runRouterPass(combinedNarrative, null, null, true);
                 return 'Research pass started.';
             }
             return 'Usage: /router run | /router save [hint]';
@@ -333,6 +333,14 @@ export function getNarrativeBlocks(chat, limit = -1) {
 
 // ── Generation-ended handler ───────────────────────────────────────────────────
 
+/** In-memory counter: how many generations have fired since the agent last ran. Resets on chat change. */
+let _routerAutoTick = 0;
+
+/** Call this whenever the active chat changes so the interval counter restarts. */
+export function resetRouterTick() {
+    _routerAutoTick = 0;
+}
+
 /**
  * Fires on GENERATION_ENDED. Triggers the state model pass.
  * runStateModelPass is resolved via the module import below to avoid
@@ -352,6 +360,12 @@ export async function onGenerationEnded() {
     if (typeof globalThis._rpgRunStateModelPass === 'function') {
         await globalThis._rpgRunStateModelPass(combinedNarrative);
     }
-    
+
+    // Run-every throttle: only fire the agent every N auto-generations
+    _routerAutoTick++;
+    const runEvery = settings.routerRunEvery || 1;
+    if (_routerAutoTick < runEvery) return;
+    _routerAutoTick = 0;
+
     await runRouterPass(combinedNarrative);
 }

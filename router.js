@@ -98,9 +98,11 @@ function buildKeyringText(allBooks) {
 /**
  * The core Researcher Agent loop.
  */
-export async function runRouterPass(narrativeOutput, manualPrompt = null, customLookback = null) {
+export async function runRouterPass(narrativeOutput, manualPrompt = null, customLookback = null, isManual = false) {
     const settings = getSettings();
     if (!settings.routerEnabled || _routerRunning) return;
+    // routerPaused blocks auto-runs only; manual UI runs always go through
+    if (settings.routerPaused && !isManual) return;
 
     const ctx = SillyTavern.getContext();
     if (!ctx.generateRaw) return;

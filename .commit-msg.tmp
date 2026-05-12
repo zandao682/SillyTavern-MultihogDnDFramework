@@ -1,0 +1,12 @@
+Feat: agent pause, run-every interval, prefix picker (v2.0.2)
+
+Pause button in agent panel header: stops auto-runs after each generation
+without disabling the agent. Manual runs and Direct Commands always fire
+regardless of pause state.
+
+Run every N messages: new input next to Main Lookback. Set to 5 to run
+the agent once per 5 generations. Counter resets on chat change.
+Defaults to 1 (every message).
+
+Campaign prefix Pick button: opens a floating dropdown of all existing
+world info books and auto-extracts the root prefix when clicked.
