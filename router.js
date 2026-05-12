@@ -441,6 +441,11 @@ async function applyAction(action, allBooks = {}, currentTime = '', breadcrumb =
         const catName = Object.keys(catMap).find(k => cat.includes(k));
         const targetBook = catName ? (prefix ? `${prefix}_${catMap[catName]}` : catMap[catName]) : baseBook;
 
+        // For LOC entries, auto-enrich the label with the breadcrumb hierarchy if not already set
+        if (cat.includes('LOC') && breadcrumb && !rec.label.includes(' :: ')) {
+            rec.label = `${breadcrumb} :: ${rec.label}`;
+        }
+
         if (cat.includes('EVENT')) {
             if (currentTime && !rec.label.includes('[Day')) {
                 rec.label = `[${currentTime}] ${rec.label}`;
