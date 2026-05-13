@@ -368,7 +368,7 @@ import { runRouterPass, rollbackRouterPass, reapplyRouterPass, getLorebookManife
                 const charName = (ctx.name2 || '').trim().replace(/[^a-zA-Z0-9_-]/g, '_');
                 if (!charName) {
                     // No character loaded yet — fall back to prompt if enabled
-                    if (s2.routerPromptForPrefix) setTimeout(() => showPrefixPromptBanner(), 0);
+                    /* no manual prompt — auto-prefix handles it */
                     return;
                 }
                 // Set the prefix
@@ -390,11 +390,6 @@ import { runRouterPass, rollbackRouterPass, reapplyRouterPass, getLorebookManife
                 // Activate matching books (deactivates other campaign stacks)
                 if (matchingBooks.length) activateCampaignBooks().catch(() => {});
             }, 800); // small delay so ctx.name2 is populated after chat load
-        }
-
-        // Show manual prefix prompt if toggle is on and still no linked stack
-        if (s.routerEnabled && s.routerPromptForPrefix && !chatBooks?.length) {
-            setTimeout(() => showPrefixPromptBanner(), 600);
         }
 
         if (!s.chatLinkEnabled) {
@@ -424,62 +419,6 @@ import { runRouterPass, rollbackRouterPass, reapplyRouterPass, getLorebookManife
         updateChatLinkUI();
     }
 
-    function showPrefixPromptBanner() {
-        const existing = document.getElementById('rt-prefix-prompt-banner');
-        if (existing) return; // already showing
-
-        const s = getSettings();
-        const banner = document.createElement('div');
-        banner.id = 'rt-prefix-prompt-banner';
-        banner.style.cssText = 'position:fixed; bottom:70px; left:50%; transform:translateX(-50%); z-index:99999; background:#1e1e2e; border:1px solid rgba(255,200,50,0.4); border-radius:8px; padding:10px 14px; display:flex; align-items:center; gap:8px; box-shadow:0 4px 20px rgba(0,0,0,0.6); font-size:0.85em; color:#ddd; max-width:420px; width:max-content;';
-        banner.innerHTML = `
-            <span style="opacity:0.8;">📚 No lorebook stack linked to this chat.</span>
-            <input id="rt-prefix-prompt-input" type="text" placeholder="Campaign prefix…" value="${s.routerCampaignPrefix || ''}"
-                style="background:#111; border:1px solid #444; color:#ddd; border-radius:4px; padding:3px 7px; font-size:0.9em; width:130px; outline:none;">
-            <button id="rt-prefix-prompt-set" style="background:rgba(0,180,120,0.25); border:1px solid #00b478; color:#00e0a0; border-radius:4px; padding:3px 10px; cursor:pointer; font-size:0.85em; white-space:nowrap;">Set &amp; Link</button>
-            <button id="rt-prefix-prompt-dismiss" style="background:none; border:none; color:#888; cursor:pointer; font-size:1.1em; line-height:1; padding:0 2px;" title="Dismiss">✕</button>
-        `;
-
-        document.body.appendChild(banner);
-
-        banner.querySelector('#rt-prefix-prompt-dismiss')?.addEventListener('click', () => banner.remove());
-
-        banner.querySelector('#rt-prefix-prompt-set')?.addEventListener('click', async () => {
-            const input = /** @type {HTMLInputElement} */ (banner.querySelector('#rt-prefix-prompt-input'));
-            const prefix = input?.value?.trim() || '';
-            if (!prefix) { input && (input.style.borderColor = '#ff5555'); return; }
-            const s2 = getSettings();
-            s2.routerCampaignPrefix = prefix;
-            $('#rpg_tracker_router_campaign_prefix').val(prefix);
-            // Actually "link" this prefix to the current chat by storing campaignBooks.
-            if (_currentChatId) {
-                const ctx = SillyTavern.getContext();
-                if (typeof ctx.updateWorldInfoList === 'function') {
-                    try { await ctx.updateWorldInfoList(); } catch (_) {}
-                }
-                let allNames = [];
-                if (typeof ctx.getWorldInfoNames === 'function') {
-                    try { allNames = await ctx.getWorldInfoNames(); } catch (_) {}
-                }
-                const matchingBooks = allNames.filter(n => n.startsWith(prefix));
-                if (!s2.chatStates) s2.chatStates = {};
-                if (!s2.chatStates[_currentChatId]) s2.chatStates[_currentChatId] = {};
-                s2.chatStates[_currentChatId].campaignBooks = matchingBooks;
-            }
-            saveSettings();
-            if (s2.chatLinkEnabled && _currentChatId) saveChatState(_currentChatId);
-            banner.remove();
-            const count = await activateCampaignBooks();
-            toastr['success'](`Prefix set to "${prefix}" — activated ${count} lorebook(s).`, 'Lorebook Agent');
-        });
-
-        // Also submit on Enter
-        banner.querySelector('#rt-prefix-prompt-input')?.addEventListener('keydown', (e) => {
-            if (/** @type {KeyboardEvent} */ (e).key === 'Enter') {
-                /** @type {HTMLElement} */ (banner.querySelector('#rt-prefix-prompt-set'))?.click();
-            }
-        });
-    }
 
     async function openThemeWizard(isIteration = false) {
         const settings = getSettings();
@@ -6062,14 +6001,6 @@ Rules:
                     // Keep in sync with the in-panel Auto-link checkbox
                     const inPanelCheck = /** @type {HTMLInputElement|null} */ (document.getElementById('rt-agent-auto-activate'));
                     if (inPanelCheck) inPanelCheck.checked = s.routerAutoActivateBooks;
-                    saveSettings();
-                });
-
-            // Prompt-for-prefix toggle (settings sidebar)
-            $('#rpg_tracker_router_prompt_prefix')
-                .prop('checked', !!settings.routerPromptForPrefix)
-                .on('change', function () {
-                    getSettings().routerPromptForPrefix = !!$(this).prop('checked');
                     saveSettings();
                 });
 
