@@ -2734,21 +2734,63 @@ Rules:
             const _openEntries = new Set();
 
             /**
-             * Builds and wires the editable entry body element for one manifest item.
-             * Called per-entry both on first render and on refresh (skipped if dirty).
+             * @param {object} item - manifest row from getLorebookManifest
+             * @param {{ stale?: boolean, dirty?: {content:string, keys:string, comment:string} | null }} [opts]
              */
-            const buildEntryBody = (item) => {
+            const buildEntryBody = (item, opts = {}) => {
                 const body = document.createElement('div');
                 body.style.cssText = 'display:none; padding:4px 4px 6px 12px; flex-direction:column; gap:5px;';
                 body.dataset.entryId = item.id;
 
-                // ── Stale badge (shown when a refresh found external changes) ──
                 const staleBadge = document.createElement('div');
-                staleBadge.style.cssText = 'display:none; font-size:9px; color:#ffa500; font-style:italic;';
+                staleBadge.className = 'rt-agent-manifest-stale';
+                staleBadge.style.cssText = 'display:' + (opts.stale ? 'block' : 'none') + '; font-size:9px; color:#ffa500; font-style:italic;';
                 staleBadge.textContent = '⚠ Entry changed externally — save discards external changes or cancel to reload.';
                 body.appendChild(staleBadge);
 
-                // ── Title / comment ──
+                // ── Read-only view (default when expanded) ─────────────────
+                const readPane = document.createElement('div');
+                readPane.className = 'rt-agent-manifest-read';
+                readPane.style.cssText = 'display:flex; flex-direction:column; gap:4px;';
+
+                const titleRead = document.createElement('div');
+                titleRead.style.cssText = 'font-size:9px; color:var(--rt-text);';
+                titleRead.innerHTML = `<span style="opacity:0.5;">Title:</span> ${escapeHtml(item.label)}`;
+
+                const keysRead = document.createElement('div');
+                keysRead.style.cssText = 'font-size:9px; opacity:0.55; color:var(--rt-text-muted); font-family:var(--rt-font-mono);';
+                keysRead.textContent = '[' + item.keys.join(', ') + ']';
+
+                const contentRead = document.createElement('div');
+                contentRead.style.cssText = 'font-size:10px; opacity:0.88; color:var(--rt-text); line-height:1.45; white-space:pre-wrap; word-break:break-word; max-height:220px; overflow-y:auto;';
+                contentRead.textContent = item.content || '';
+
+                const readActions = document.createElement('div');
+                readActions.style.cssText = 'display:flex; justify-content:flex-end; margin-top:2px;';
+                const editBtn = document.createElement('button');
+                editBtn.type = 'button';
+                editBtn.textContent = 'Edit';
+                editBtn.title = 'Edit this lore entry';
+                editBtn.style.cssText = 'background:rgba(80,140,255,0.12); border:1px solid rgba(80,140,255,0.35); color:var(--rt-accent); border-radius:3px; font-size:9px; padding:2px 10px; cursor:pointer;';
+                readActions.appendChild(editBtn);
+
+                readPane.appendChild(titleRead);
+                readPane.appendChild(keysRead);
+                readPane.appendChild(contentRead);
+                readPane.appendChild(readActions);
+                body.appendChild(readPane);
+
+                const syncReadFromItem = () => {
+                    titleRead.innerHTML = `<span style="opacity:0.5;">Title:</span> ${escapeHtml(item.label)}`;
+                    keysRead.textContent = '[' + item.keys.join(', ') + ']';
+                    contentRead.textContent = item.content || '';
+                };
+
+                // ── Edit form (hidden until Edit) ─────────────────────────────
+                const editPane = document.createElement('div');
+                editPane.className = 'rt-agent-manifest-edit';
+                editPane.style.cssText = 'display:none; flex-direction:column; gap:5px;';
+
                 const titleRow = document.createElement('div');
                 titleRow.style.cssText = 'display:flex; gap:4px; align-items:center;';
                 const titleLbl = document.createElement('span');
@@ -2756,13 +2798,13 @@ Rules:
                 titleLbl.textContent = 'Title:';
                 const titleInp = document.createElement('input');
                 titleInp.type = 'text';
+                titleInp.className = 'rt-agent-manifest-inp-title';
                 titleInp.value = item.label;
                 titleInp.style.cssText = 'flex:1; background:rgba(0,0,0,0.35); color:var(--rt-text); border:1px solid rgba(255,255,255,0.12); border-radius:3px; font-size:9px; padding:2px 5px; min-width:0;';
                 titleRow.appendChild(titleLbl);
                 titleRow.appendChild(titleInp);
-                body.appendChild(titleRow);
+                editPane.appendChild(titleRow);
 
-                // ── Keywords ──
                 const keysRow = document.createElement('div');
                 keysRow.style.cssText = 'display:flex; gap:4px; align-items:center;';
                 const keysLbl = document.createElement('span');
@@ -2770,20 +2812,20 @@ Rules:
                 keysLbl.textContent = 'Keys:';
                 const keysInp = document.createElement('input');
                 keysInp.type = 'text';
+                keysInp.className = 'rt-agent-manifest-inp-keys';
                 keysInp.value = item.keys.join(', ');
                 keysInp.placeholder = 'keyword1, keyword2, …';
                 keysInp.style.cssText = 'flex:1; background:rgba(0,0,0,0.35); color:var(--rt-text); border:1px solid rgba(255,255,255,0.12); border-radius:3px; font-size:9px; padding:2px 5px; font-family:var(--rt-font-mono); min-width:0;';
                 keysRow.appendChild(keysLbl);
                 keysRow.appendChild(keysInp);
-                body.appendChild(keysRow);
+                editPane.appendChild(keysRow);
 
-                // ── Content ──
                 const contentArea = document.createElement('textarea');
+                contentArea.className = 'rt-agent-manifest-ta-content';
                 contentArea.value = item.content || '';
                 contentArea.rows = 5;
                 contentArea.style.cssText = 'width:100%; background:rgba(0,0,0,0.35); color:var(--rt-text); border:1px solid rgba(255,255,255,0.12); border-radius:3px; font-size:9px; padding:4px 5px; line-height:1.4; resize:vertical; box-sizing:border-box; font-family:var(--rt-font-mono);';
 
-                // Mark dirty on any change
                 const markDirty = () => {
                     _dirtyEntries.set(item.id, {
                         content: contentArea.value,
@@ -2794,27 +2836,53 @@ Rules:
                 titleInp.addEventListener('input', markDirty);
                 keysInp.addEventListener('input', markDirty);
                 contentArea.addEventListener('input', markDirty);
-                body.appendChild(contentArea);
+                editPane.appendChild(contentArea);
 
-                // ── Action bar ──
                 const actions = document.createElement('div');
                 actions.style.cssText = 'display:flex; gap:5px; justify-content:flex-end; align-items:center;';
 
                 const saveBtn = document.createElement('button');
+                saveBtn.type = 'button';
                 saveBtn.style.cssText = 'background:rgba(0,200,140,0.15); border:1px solid rgba(0,200,140,0.4); color:#00c88c; border-radius:3px; font-size:9px; padding:2px 8px; cursor:pointer;';
                 saveBtn.textContent = 'Save';
                 saveBtn.title = 'Save changes to lorebook';
 
                 const cancelBtn = document.createElement('button');
+                cancelBtn.type = 'button';
                 cancelBtn.style.cssText = 'background:transparent; border:1px solid rgba(255,255,255,0.12); color:var(--rt-text-muted); border-radius:3px; font-size:9px; padding:2px 8px; cursor:pointer;';
                 cancelBtn.textContent = 'Cancel';
-                cancelBtn.title = 'Discard edits and reload from lorebook';
+                cancelBtn.title = 'Close editor and discard unsaved changes';
 
                 actions.appendChild(cancelBtn);
                 actions.appendChild(saveBtn);
-                body.appendChild(actions);
+                editPane.appendChild(actions);
+                body.appendChild(editPane);
 
-                // ── Save handler ──
+                // Restore dirty / forced-edit state from refresh
+                const d = opts.dirty;
+                if (d) {
+                    if (d.comment !== undefined) titleInp.value = d.comment;
+                    if (d.keys !== undefined) keysInp.value = d.keys;
+                    if (d.content !== undefined) contentArea.value = d.content;
+                    readPane.style.display = 'none';
+                    editPane.style.display = 'flex';
+                }
+
+                editBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    titleInp.value = item.label;
+                    keysInp.value = item.keys.join(', ');
+                    contentArea.value = item.content || '';
+                    const snap = _dirtyEntries.get(item.id);
+                    if (snap) {
+                        if (snap.comment !== undefined) titleInp.value = snap.comment;
+                        if (snap.keys !== undefined) keysInp.value = snap.keys;
+                        if (snap.content !== undefined) contentArea.value = snap.content;
+                    }
+                    readPane.style.display = 'none';
+                    editPane.style.display = 'flex';
+                });
+
                 saveBtn.addEventListener('click', async (e) => {
                     e.stopPropagation();
                     if (isRouterRunning()) {
@@ -2846,7 +2914,6 @@ Rules:
                     }
                 });
 
-                // ── Cancel handler: reload from lorebook ──
                 cancelBtn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     _dirtyEntries.delete(item.id);
@@ -2854,6 +2921,9 @@ Rules:
                     titleInp.value = item.label;
                     keysInp.value = item.keys.join(', ');
                     contentArea.value = item.content || '';
+                    syncReadFromItem();
+                    readPane.style.display = 'flex';
+                    editPane.style.display = 'none';
                 });
 
                 return body;
@@ -2933,20 +3003,14 @@ Rules:
                                 <button class="rt-agent-entry-delete" data-id="${item.id}" style="background:none; border:none; color:var(--rt-text-muted); cursor:pointer; font-size:9px; padding:1px 3px; opacity:0; flex-shrink:0;" title="Delete entry"><i class="fa-solid fa-trash"></i></button>
                             `;
 
-                            // ── Entry body: reuse existing DOM if dirty, otherwise build fresh ──
-                            let entryBody;
-                            if (isDirty) {
-                                // Keep the live editor — just flag it as potentially stale
-                                entryBody = document.createElement('div');
-                                entryBody.style.cssText = 'display:flex; flex-direction:column; gap:5px; padding:4px 4px 6px 12px;';
-                                entryBody.textContent = ''; // placeholder; real body reinjected below
-                                // We'll swap it after appendChild via a flag
-                            } else {
-                                entryBody = buildEntryBody(item);
-                                if (_openEntries.has(item.id)) {
-                                    entryBody.style.display = 'flex';
-                                    entryHdr.style.background = 'rgba(255,255,255,0.05)';
-                                }
+                            const dirtySnap = isDirty ? _dirtyEntries.get(item.id) : null;
+                            const entryBody = buildEntryBody(item, {
+                                stale: !!isDirty,
+                                dirty: dirtySnap || null,
+                            });
+                            if (_openEntries.has(item.id)) {
+                                entryBody.style.display = 'flex';
+                                entryHdr.style.background = 'rgba(255,255,255,0.05)';
                             }
 
                             // Show delete button on hover
@@ -2980,25 +3044,6 @@ Rules:
                             entryEl.appendChild(entryHdr);
                             entryEl.appendChild(entryBody);
                             folderBody.appendChild(entryEl);
-
-                            // If dirty: rebuild the real editor and inject it, marking stale
-                            if (isDirty) {
-                                const realBody = buildEntryBody(item);
-                                const dirty = _dirtyEntries.get(item.id);
-                                // Restore the user's in-progress edits
-                                const titleInp = /** @type {HTMLInputElement} */ (realBody.querySelector('input[type="text"]'));
-                                const keysInp = /** @type {HTMLInputElement} */ (realBody.querySelectorAll('input[type="text"]')[1]);
-                                const contentArea = /** @type {HTMLTextAreaElement} */ (realBody.querySelector('textarea'));
-                                const staleBadge = /** @type {HTMLElement} */ (realBody.querySelector('div[style*="ffa500"]'));
-                                if (titleInp && dirty?.comment !== undefined)   titleInp.value   = dirty.comment;
-                                if (keysInp  && dirty?.keys    !== undefined)   keysInp.value    = dirty.keys;
-                                if (contentArea && dirty?.content !== undefined) contentArea.value = dirty.content;
-                                if (staleBadge) staleBadge.style.display = 'block';
-                                realBody.style.display = 'flex';
-                                entryHdr.style.background = 'rgba(255,255,255,0.05)';
-                                entryEl.replaceChild(realBody, entryBody);
-                                _openEntries.add(item.id);
-                            }
                         }
 
                         folder.appendChild(folderHdr);
