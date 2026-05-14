@@ -2,6 +2,11 @@
 
 All notable changes to the **Fatbody D&D Framework** will be documented in this file.
 
+## [2.2.6] - 2026-05-14
+
+### Changed
+- **Modular slot bar**: Larger, higher-contrast `+` / `×` controls (26px touch targets, bordered pill backgrounds) for add/remove middle slots.
+
 ## [2.2.5] - 2026-05-14
 
 ### Changed
