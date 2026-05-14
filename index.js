@@ -2904,6 +2904,7 @@ Rules:
                         saveBtn.textContent = 'Save';
                         saveBtn.disabled = false;
                         document.dispatchEvent(new CustomEvent('rt_lore_agent_updated'));
+                        await refreshManifest();
                         // @ts-ignore
                         toastr.success('Entry saved.', 'Lorebook Agent');
                     } else {
