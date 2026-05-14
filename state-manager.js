@@ -18,7 +18,7 @@ export const MODULE_NAME = 'rpg_tracker';
 export const DEFAULT_MODULES = {
     npc:   { enabled: true, tag: 'NPC',   format: 'Name | Description | Keywords',                    instruction: 'Named characters. Do NOT create an entry for {{user}} — their state lives in the State Memo. Mention {{user}} in EVENT or QUEST entries as needed.' },
     loc:   { enabled: true, tag: 'LOC',   format: 'Name | Description | Keywords',                    instruction: 'Named places. The Name MUST be the full hierarchical path using " :: " as the separator (e.g. "Khelt :: Rust-Lantern District :: Marrow-Deep Mines Office"). Include each ancestor name as a keyword (e.g. "Khelt, Rust-Lantern District, mines").' },
-    fac:   { enabled: true, tag: 'FAC',   format: 'Name | Description | Keywords',                    instruction: 'Named factions, guilds, organisations. Focus on the faction\'s unfolding narrative — what they are doing, what has changed, what schemes or conflicts are active. Record player standing and notable members as secondary context.' },
+    fac:   { enabled: true, tag: 'FAC',   format: 'Name | Status | Description | Keywords',           instruction: 'Named factions, guilds, organisations. **Status**: short current-state line (standing with the party, active conflicts, what changed recently). **Description**: longer narrative (history, ideology, schemes, notable members). **Keywords**: comma-separated terms for discovery.' },
     quest: { enabled: true, tag: 'QUEST', format: 'Name | Location | Description | Keywords',         instruction: 'ONLY record a quest when the player explicitly accepts it. A quest being mentioned or offered is NOT enough.' },
     event: { enabled: true, tag: 'EVENT', format: 'Name | Details | Keywords',                        instruction: 'Significant narrative events. The Name is a SHORT, STABLE identifier (e.g. "Siege of Ashford") — no timestamps in the name, no "Final"/"Update" suffixes. Put timestamps in the Details field. Reuse the exact same Name when adding new information — entries are chronicles that accumulate automatically.' }
 };
@@ -248,10 +248,15 @@ Example: "[Day 1, 11:52] Character signed the contract with Brodrik."
         s.routerModules = {
             npc: { enabled: !!old.npc, tag: 'NPC', format: 'Name | Description | Keywords', instruction: 'Named characters. Do NOT create an entry for {{user}} — their state lives in the State Memo.' },
             loc: { enabled: !!old.loc, tag: 'LOC', format: 'Name | Description | Keywords', instruction: 'Named places. Name MUST be the full hierarchical path using " :: " as the separator (e.g. "Khelt :: Rust-Lantern District :: Marrow-Deep Mines Office"). Include each ancestor as a keyword.' },
-            fac: { enabled: !!old.fac, tag: 'FAC', format: 'Name | Description | Keywords', instruction: 'Named factions, guilds, organisations. Focus on the faction\'s unfolding narrative — what they are doing, what has changed, what schemes or conflicts are active.' },
+            fac: { enabled: !!old.fac, tag: 'FAC', format: 'Name | Status | Description | Keywords', instruction: 'Named factions, guilds, organisations. **Status**: short current-state line. **Description**: longer narrative (history, schemes, members). **Keywords**: comma-separated terms.' },
             quest: { enabled: !!old.quest, tag: 'QUEST', format: 'Name | Location | Description | Keywords', instruction: 'ONLY record a quest when the player explicitly accepts it. A quest being mentioned or offered is NOT enough.' },
             event: { enabled: !!old.event, tag: 'EVENT', format: 'Name | Details | Keywords', instruction: 'Significant narrative events. Use a SHORT, STABLE Name — no timestamps in the name. Reuse the exact same Name when adding new information.' }
         };
+    }
+
+    // FAC tag: 3-field format -> 4-field (v2.2.3+) so Status and Description are separate prompts to the model
+    if (s.routerModules?.fac?.format === 'Name | Description | Keywords') {
+        s.routerModules.fac.format = DEFAULT_MODULES.fac.format;
     }
 
     return extensionSettings[MODULE_NAME];

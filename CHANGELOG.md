@@ -2,6 +2,11 @@
 
 All notable changes to the **Fatbody D&D Framework** will be documented in this file.
 
+## [2.2.3] - 2026-05-14
+
+### Changed
+- **Basic Mode FAC tag**: Default template is now four fields — `Name | Status | Description | Keywords`. Status is a short current-state line; Description holds the longer narrative. Parser joins both into entry content; old three-field `[[FAC: Name | Description | Keywords]]` tags still work. Existing saves using the previous default `format` string are migrated on load. Module reset now restores both `instruction` and `format`.
+
 ## [2.2.2] - 2026-05-14
 
 ### Fixed

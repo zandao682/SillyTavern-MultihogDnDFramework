@@ -321,6 +321,8 @@ Also include each ancestor name (Khelt, Rust-Lantern District) as a plain keywor
 NPC / FAC / QUEST / EVENT labels: Name only ? NO " :: " hierarchy, NO tag prefix.
 Example: [[FAC: Iron Syndicate | ...]]  NOT  [[FAC: Khelt :: Iron Syndicate | ...]]  and  NOT  [[FAC: FAC: Iron Syndicate | ...]]
 
+**FAC** uses four fields: \`Name | Status | Description | Keywords\`. Put a concise current-state line in **Status** (standing, conflicts, recent changes); put history, ideology, schemes, and members in **Description**.
+
 ## ATTENTION & MEMORY
 1. **NEWLY ACTIVATED THIS TURN**: Entries whose keywords appeared in the latest narrator output are pre-loaded here with full content. You do not need to activate them again — they are already active.
 2. **ACTIVE MEMORY**: Full details of all other currently active entities. You can update them at any time.
@@ -338,7 +340,8 @@ Example: [[FAC: Iron Syndicate | ...]]  NOT  [[FAC: Khelt :: Iron Syndicate | ..
 Example:
 Thought: I see a new NPC named Barnaby in Khelt's Rust-Lantern District. I will record him and the tavern.
 [[NPC: Barnaby | A retired blacksmith with a scar on his cheek. | Barnaby, blacksmith, ally]]
-[[LOC: Khelt :: Rust-Lantern District :: Barnaby's Forge | Barnaby's old workshop, still smelling of soot. | forge, Khelt, Rust-Lantern]]`;
+[[LOC: Khelt :: Rust-Lantern District :: Barnaby's Forge | Barnaby's old workshop, still smelling of soot. | forge, Khelt, Rust-Lantern]]
+[[FAC: Iron Syndicate | Wary of outsiders after the forge raid; still dominant in the industrial quarter. | Founded by ex-mercenaries forty years ago; controls scrap tariffs and smuggling. Lieutenant Marna Voss handles street enforcement. | Iron Syndicate, Khelt, faction, smuggling]]`;
 
             const questMatchB = settings.currentMemo?.match(/\[QUESTS\]([\s\S]*?)\[\/QUESTS\]/i);
             const questBlockB = questMatchB ? `[QUESTS]${questMatchB[1].trim()}[/QUESTS]` : 'None';
@@ -1116,6 +1119,13 @@ function parseBasicTags(text, archiveBooks) {
             const desc = parts[2];
             const keywords = parts[3] || '';
             processMatch(name, `[Location: ${loc}] ${desc}`, keywords, 'QUEST');
+        } else if (tagName === 'FAC' && parts.length >= 4) {
+            const name = parts[0];
+            const status = parts[1];
+            const desc = parts[2];
+            const keywords = parts[3];
+            const body = [status, desc].filter(Boolean).join('\n\n');
+            processMatch(name, body, keywords, 'FAC');
         } else if (parts.length >= 3) {
             processMatch(parts[0], parts[1], parts[2], tagName);
         }

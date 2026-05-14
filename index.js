@@ -2873,6 +2873,9 @@ Rules:
                             const defaults = DEFAULT_MODULES;
                             if (defaults[id]) {
                                 s.routerModules[id].instruction = defaults[id].instruction;
+                                if (defaults[id].format != null) {
+                                    s.routerModules[id].format = defaults[id].format;
+                                }
                                 saveSettings();
                                 renderAgentModules();
                             }
