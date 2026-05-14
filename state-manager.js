@@ -16,7 +16,7 @@ export const MODULE_NAME = 'rpg_tracker';
 
 // ── Default module definitions (single source of truth for reset logic) ─────────
 export const DEFAULT_MODULES = {
-    npc:   { enabled: true, tag: 'NPC',   format: 'Name | Description | Keywords',                    instruction: 'Named characters. Do NOT create an entry for {{user}} — their state lives in the State Memo. Mention {{user}} in EVENT or QUEST entries as needed.' },
+    npc:   { enabled: true, tag: 'NPC',   format: 'Name | Description | Keywords',                    instruction: 'Named characters. Do NOT create an entry for {{user}}. Mention {{user}} in EVENT or QUEST entries as needed.' },
     loc:   { enabled: true, tag: 'LOC',   format: 'Name | Description | Keywords',                    instruction: 'Named places. The Name MUST be the full hierarchical path using " :: " as the separator (e.g. "Khelt :: Rust-Lantern District :: Marrow-Deep Mines Office"). Include each ancestor name as a keyword (e.g. "Khelt, Rust-Lantern District, mines").' },
     fac:   { enabled: true, tag: 'FAC',   format: 'Name | Status | Description | Keywords',           instruction: 'Named factions, guilds, organisations. **Status**: short current-state line (standing with the party, active conflicts, what changed recently). **Description**: longer narrative (history, ideology, schemes, notable members). **Keywords**: comma-separated terms for discovery.' },
     quest: { enabled: true, tag: 'QUEST', format: 'Name | Location | Description | Keywords',         instruction: 'ONLY record a quest when the player explicitly accepts it. A quest being mentioned or offered is NOT enough.' },
@@ -246,7 +246,7 @@ Example: "[Day 1, 11:52] Character signed the contract with Brodrik."
     if (s.routerModules && typeof s.routerModules.npc === 'boolean') {
         const old = s.routerModules;
         s.routerModules = {
-            npc: { enabled: !!old.npc, tag: 'NPC', format: 'Name | Description | Keywords', instruction: 'Named characters. Do NOT create an entry for {{user}} — their state lives in the State Memo.' },
+            npc: { enabled: !!old.npc, tag: 'NPC', format: 'Name | Description | Keywords', instruction: DEFAULT_MODULES.npc.instruction },
             loc: { enabled: !!old.loc, tag: 'LOC', format: 'Name | Description | Keywords', instruction: 'Named places. Name MUST be the full hierarchical path using " :: " as the separator (e.g. "Khelt :: Rust-Lantern District :: Marrow-Deep Mines Office"). Include each ancestor as a keyword.' },
             fac: { enabled: !!old.fac, tag: 'FAC', format: 'Name | Status | Description | Keywords', instruction: 'Named factions, guilds, organisations. **Status**: short current-state line. **Description**: longer narrative (history, schemes, members). **Keywords**: comma-separated terms.' },
             quest: { enabled: !!old.quest, tag: 'QUEST', format: 'Name | Location | Description | Keywords', instruction: 'ONLY record a quest when the player explicitly accepts it. A quest being mentioned or offered is NOT enough.' },
@@ -270,6 +270,16 @@ Example: "[Day 1, 11:52] Character signed the contract with Brodrik."
     if (Array.isArray(s.routerCustomTags)) {
         for (const ct of s.routerCustomTags) {
             if (!ct.format) ct.format = 'Name | Description | Keywords';
+        }
+    }
+
+    // Strip legacy NPC line about State Memo (tracker memo UI is optional / unused in many setups)
+    if (s.routerModules?.npc?.instruction && typeof s.routerModules.npc.instruction === 'string') {
+        let ins = s.routerModules.npc.instruction;
+        if (/their state lives in the State Memo/i.test(ins)) {
+            ins = ins.replace(/\s*[\u2014\u2013-]\s*their state lives in the State Memo\.?\s*/gi, '. ');
+            ins = ins.replace(/\s{2,}/g, ' ').replace(/\.\s*\./g, '.').trim();
+            s.routerModules.npc.instruction = ins;
         }
     }
 

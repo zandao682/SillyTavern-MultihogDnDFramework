@@ -347,12 +347,17 @@ import { runRouterPass, rollbackRouterPass, reapplyRouterPass, getLorebookManife
             });
         } else {
             // Fallback to the persistent extension prompt system
-            console.log('[RPG Tracker] Interceptors not available. Using setExtensionPrompt.');
+            console.debug('[RPG Tracker] Active lore injection uses setExtensionPrompt (no addPromptManagerInterceptor in this SillyTavern build).');
             refreshExtensionPrompt();
-            
-            // Re-refresh on important events
-            ctx.eventSource.on(ctx.eventTypes.CHARACTER_MOUNTED, () => refreshExtensionPrompt());
-            ctx.eventSource.on(ctx.eventTypes.CHAT_CHANGED, () => refreshExtensionPrompt());
+
+            const { eventSource, event_types } = ctx;
+            const refresh = () => void refreshExtensionPrompt();
+            if (event_types?.CHAT_CHANGED != null) {
+                eventSource.on(event_types.CHAT_CHANGED, refresh);
+            }
+            if (event_types?.CHARACTER_PAGE_LOADED != null) {
+                eventSource.on(event_types.CHARACTER_PAGE_LOADED, refresh);
+            }
         }
     }
 
@@ -2189,10 +2194,6 @@ Rules:
                         <button id="rt-agent-help-btn" style="background: var(--rt-accent-bg); border: 1px solid var(--rt-accent-dim); color: var(--rt-accent); border-radius: 12px; width: 20px; height: 20px; font-size: 0.846em; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="What is the Lorebook Agent?">?</button>
                     </div>
 
-                    <div style="background: rgba(255, 165, 0, 0.1); border: 1px solid rgba(255, 165, 0, 0.3); color: #ffa500; padding: 6px; border-radius: 4px; font-size: 0.769em; text-align: center; font-weight: bold; margin-bottom: 15px;">
-                        ⚠️ UNDER CONSTRUCTION, NEEDS TESTING
-                    </div>
-
                     <label style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; cursor: pointer; opacity: 0.8; font-size: 0.846em;" title="Use simple text tags [[NPC: Name | Desc]] instead of complex tools. Better for small models.">
                         Basic Mode (tag-based, no tool calls)
                         <input type="checkbox" id="rt-agent-router-basic" ${settings.routerBasicMode ? 'checked' : ''}>
@@ -2344,10 +2345,6 @@ Rules:
                     </div>
                 </div>
                 <div class="rpg-tracker-footer" id="rt-agent-footer">
-                    <div id="rt-agent-campaign-prefix-strip" style="padding: 6px 8px 5px; border-top: 1px solid rgba(255,255,255,0.08); font-size: 0.65em; line-height: 1.35; color: var(--rt-text-muted);" title="Managed lorebooks: {prefix} or {prefix}_Module (one segment after _, no extra underscores).">
-                        <div style="opacity: 0.8; font-weight: 600; margin-bottom: 3px; letter-spacing: 0.03em;">CAMPAIGN PREFIX</div>
-                        <div id="rt-agent-router-prefix-display" style="font-family: var(--rt-font-mono); color: var(--rt-text); word-break: break-all; font-size: 1.05em;">${settings.routerCampaignPrefix ? escapeHtml(settings.routerCampaignPrefix) : '—'}</div>
-                    </div>
                     <div class="rpg-tracker-nav">
                         <button class="rpg-tracker-nav-btn" id="rt-agent-nav-back" title="Undo last lorebook pass">←</button>
                         <span class="rpg-tracker-nav-label" id="rt-agent-nav-label">[ LIVE ]</span>
