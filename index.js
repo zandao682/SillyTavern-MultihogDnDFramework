@@ -775,26 +775,34 @@ import { getRequestHeaders } from '../../../../script.js';
             // Capture the departing chat's book list NOW (before any async gap).
             const _oldBooksDeferred = s.chatStates?.[oldChatId]?.campaignBooks || [];
 
+            // Helper: turn off the old books using only the known list — no registry scan.
+            const _deactivateOldBooks = async () => {
+                if (!_oldBooksDeferred.length) return;
+                const _ctx = SillyTavern.getContext();
+                if (typeof _ctx.executeSlashCommandsWithOptions !== 'function') return;
+                for (const name of _oldBooksDeferred) {
+                    await _ctx.executeSlashCommandsWithOptions(`/world state=off silent=true "${name}"`).catch(() => {});
+                }
+            };
+
             // Cancel any pending derivation from a previous CHAT_CHANGED.
             if (_prefixDeriveTimer) clearTimeout(_prefixDeriveTimer);
             _prefixDeriveTimer = setTimeout(async () => {
                 _prefixDeriveTimer = null;
                 if (newChatId !== _currentChatId) return;
 
-                // Step 1: Deactivate the old stack FIRST — same logic as the Fast Path.
-                // Runs inside the timeout so ST has settled its own chat-init before we
-                // issue /world commands, eliminating the race condition that let old books
-                // survive until the registry scan finished (~90s on bloated installs).
-                const _ctx = SillyTavern.getContext();
-                if (_oldBooksDeferred.length && typeof _ctx.executeSlashCommandsWithOptions === 'function') {
-                    for (const name of _oldBooksDeferred) {
-                        await _ctx.executeSlashCommandsWithOptions(`/world state=off silent=true "${name}"`).catch(() => {});
-                    }
-                }
+                // Pass 1 (~800ms): deactivate before the registry scan so books vanish fast.
+                await _deactivateOldBooks();
 
-                // Step 2: Discover if the new chat actually has any linked books.
-                // (This is the only part that needs the registry scan.)
+                // Discover if the new chat actually has any linked books (needs registry scan).
                 await syncCampaignPrefixAndWorldsForChat(newChatId, 'CHAT_CHANGED(debounced)');
+
+                // Pass 2 (~after scan): ST's deferred world-info state restoration can re-pin
+                // globally active books AFTER our first pass. A follow-up sweep catches this
+                // without needing another registry scan — just direct /world state=off commands.
+                if (newChatId === _currentChatId) {
+                    await _deactivateOldBooks();
+                }
             }, 800);
         }
 
