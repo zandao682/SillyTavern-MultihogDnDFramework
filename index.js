@@ -1863,7 +1863,9 @@ Rules:
             if (left !== undefined) { panel.style.left = left + 'px'; panel.style.right = 'auto'; }
             if (top !== undefined) { panel.style.top = top + 'px'; panel.style.bottom = 'auto'; }
             if (saved.width) panel.style.width = saved.width + 'px';
-            if (saved.height) panel.style.height = saved.height + 'px';
+            // Guard: ignore saved heights that are smaller than a reasonable minimum (e.g. a stale
+            // header-only save from before the collapse feature existed). 80px ≈ header + tiny content.
+            if (saved.height && saved.height > 80) panel.style.height = saved.height + 'px';
         } catch { /* ignore */ }
     }
 
@@ -3019,6 +3021,16 @@ Rules:
                 const isHidden = (/** @type {HTMLElement} */ (agentPanel)).style.display === 'none';
                 (/** @type {HTMLElement} */ (agentPanel)).style.display = isHidden ? 'flex' : 'none';
                 if (isHidden) {
+                    // Auto-expand the main tracker if it's collapsed; agent panel is an absolute
+                    // child, so overflow:hidden on the main panel would clip it otherwise.
+                    const s = getSettings();
+                    if (s.trackerCollapsed) {
+                        s.trackerCollapsed = false;
+                        saveSettings();
+                        panel.classList.remove('rt-panel-collapsed');
+                        const colIcon = panel.querySelector('#rpg-tracker-collapse-btn i');
+                        if (colIcon) colIcon.className = 'fa-solid fa-chevron-up';
+                    }
                     syncRouterPrefixDisplays(getSettings().routerCampaignPrefix || '');
                     renderRouterUI();
                     refreshManifest();
