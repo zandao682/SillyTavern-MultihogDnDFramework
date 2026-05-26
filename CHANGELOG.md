@@ -2,6 +2,11 @@
 
 All notable changes to the **Fatbody D&D Framework** will be documented in this file.
 
+## [2.5.1] - 2026-05-26
+
+### Fixed
+- **Lorebook Agent Data Loss**: Fixed a critical bug where the Lorebook Agent would fail to recognize manually cloned or renamed campaign lorebooks due to stale frontend caches. The agent now explicitly probes the backend server (`/api/worldinfo/get` and `/api/settings/get`) before initializing a new book, completely preventing the accidental overwriting and deletion of existing lorebook files.
+
 ## [2.5.0] - 2026-05-26
 
 ### Added
