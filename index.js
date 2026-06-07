@@ -7071,7 +7071,26 @@ function buildSysprompt(rawText) {
                 return;
             }
 
-            const existingTags = BLOCK_ORDER.concat(settings.customFields.map(f => f.tag.toUpperCase()));
+            const existingTags = BLOCK_ORDER.concat((settings.customFields || []).map(f => f.tag.toUpperCase()));
+            
+            let existingFieldsContext = "";
+            BLOCK_ORDER.forEach(tag => {
+                if (!settings.modules || settings.modules[tag] !== false) {
+                    const modLower = tag.toLowerCase();
+                    const promptContent = (settings.stockPrompts && settings.stockPrompts[modLower]) 
+                        ? settings.stockPrompts[modLower] 
+                        : DEFAULT_STOCK_PROMPTS[modLower] || '';
+                    existingFieldsContext += `[${tag}] (Stock Module)\nPrompt: ${promptContent}\n\n`;
+                }
+            });
+            if (settings.customFields) {
+                settings.customFields.forEach(f => {
+                    if (!settings.modules || settings.modules[f.tag.toUpperCase()] !== false) {
+                        existingFieldsContext += `[${f.tag}] (Custom Field: ${f.label})\nPrompt: ${f.prompt}\nTemplate: ${f.template}\n\n`;
+                    }
+                });
+            }
+
             const aiPrompt = `You are a configuration generator for a game state tracker extension.
 
 The user's current system prompt is provided below for reference. If the user's requested tracking field relates to an existing mechanic in this system prompt, base your instructions off that system. If it doesn't, proceed as usual:
@@ -7079,18 +7098,16 @@ The user's current system prompt is provided below for reference. If the user's 
 ${document.getElementById('main_prompt_quick_edit_textarea')?.value || settings.systemPromptTemplate || ''}
 </current_prompt>
 
-Here are the user's CURRENTLY ENABLED custom tracking fields. Use these for inspiration on formatting, depth, and style, and ensure your new field complements them without duplicating functionality:
-<existing_custom_fields>
-${settings.customFields.filter(f => f.enabled !== false).map(f => `[${f.tag}] ${f.label}\nPrompt: ${f.prompt}\nTemplate: ${f.template}`).join('\n\n') || "No custom fields exist yet."}
-</existing_custom_fields>
+Here are ALL the user's currently enabled tracking fields (both stock and custom), including their exact instructions and formatting. Use these for inspiration on depth and style. Ensure your new field complements them without duplicating functionality. DO NOT use any of these existing Field IDs for your new field:
+<existing_fields>
+${existingFieldsContext.trim()}
+</existing_fields>
 
 The user wants to create a new custom tracking field. Their description:
 "${description}"
 
 Available rendering tags (MUST use at least one in the template). Tags can be placed inline (e.g., 'Health: ((BAR)) 50/100'). Pill tags optionally support parenthesis text for descriptions (e.g. 'Status: ((PILLS)) Sleeping (Unconscious)'):
 ${RENDERING_TAGS_LIBRARY.map(t => '- ' + t).join('\n')}
-
-Existing Field IDs (DO NOT use these for the new field's ID): ${existingTags.join(', ')}
 
 Return ONLY a valid JSON object with these fields:
 {
@@ -7103,7 +7120,7 @@ Return ONLY a valid JSON object with these fields:
 
 RULES:
 - 'tag' (the field ID) must be UPPERCASE, no spaces, use underscores
-- 'tag' (the field ID) must NOT conflict with the Existing Field IDs listed above
+- 'tag' (the field ID) must NOT conflict with any of the field tags listed in <existing_fields>
 - NEVER use asterisks (*) anywhere. Do not use them in the tag, prompt, template, or anywhere else. The * symbol is completely BANNED as it breaks rendering. Use ((HIGHLIGHT)) instead if you need emphasis.
 - You are ENCOURAGED to use any of the available rendering tags, even if they are used by other fields
 - icon must be a single emoji
