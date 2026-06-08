@@ -2563,7 +2563,8 @@ ${historicalDump}`;
         openaiModel: settings.routerOpenaiModel,
     };
 
-    broadcastStep('thought', `\uD83C\uDF0D World Progression: Generating report for "${periodLabel}" (${skeletonLines.length} skeleton, ${loreLines.length} lore, ${historicalReportLines.length} prior reports)...`);
+    const loreCount = Object.values(loreGrouped).reduce((sum, arr) => sum + arr.length, 0);
+    broadcastStep('thought', `\uD83C\uDF0D World Progression: Generating report for "${periodLabel}" (${skeletonLines.length} skeleton, ${loreCount} lore, ${historicalReportLines.length} prior reports)...`);
     let reportContent;
     try {
         reportContent = await sendStateRequest(routerSettings, systemPrompt, userPrompt);
