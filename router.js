@@ -2368,7 +2368,7 @@ export async function runWorldProgressionPass(timeStr, currentMinutes) {
     const worldBookName = prefix ? `${prefix}_World` : 'World';
     const intervalHours = settings.worldProgressionIntervalHours || 24;
     const keepActive = settings.worldProgressionKeepActive || 3;
-    const wordTarget = settings.worldProgressionWordTarget || 600;
+    const wordTarget = 600;
 
     const lastFired = settings.worldProgressionLastFiredAtMinutes ?? -1;
     const intervalMinutes = intervalHours * 60;

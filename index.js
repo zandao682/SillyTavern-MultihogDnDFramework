@@ -8490,7 +8490,6 @@ Return ONLY the XML section. No explanation, no other text.`;
         const $wpInterval = $('#rpg_world_progression_interval');
         const $wpKeepActive = $('#rpg_world_progression_keep_active');
         const $wpHistoryLookback = $('#rpg_world_progression_history_lookback');
-        const $wpWordTarget = $('#rpg_world_progression_word_target');
         const $wpLookback = $('#rpg_world_progression_lookback');
         const $wpSystemPrompt = $('#rpg_world_progression_system_prompt');
         const $wpResetPrompt = $('#rpg_world_progression_btn_reset_prompt');
@@ -8549,10 +8548,7 @@ Return ONLY the XML section. No explanation, no other text.`;
             getSettings().worldProgressionHistoryLookback = parseInt(String($(this).val() || '')) || 0;
             saveSettings();
         });
-        $wpWordTarget.val(settings.worldProgressionWordTarget || 600).on('input', function () {
-            getSettings().worldProgressionWordTarget = parseInt(String($(this).val() || '')) || 600;
-            saveSettings();
-        });
+
         $wpLookback.val(settings.worldProgressionLookback ?? 0).on('input', function () {
             getSettings().worldProgressionLookback = parseInt(String($(this).val() || '')) || 0;
             saveSettings();

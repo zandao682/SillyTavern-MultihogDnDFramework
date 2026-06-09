@@ -194,7 +194,6 @@ You may be asked to use Markers: ((PLS)), ((B)), ((XB)), ((BDG)), ((HGT)). These
         worldProgressionEnabled: false,           // master toggle
         worldProgressionIntervalHours: 24,        // fire every X in-world hours (24 = daily)
         worldProgressionKeepActive: 3,            // rolling window of active reports
-        worldProgressionWordTarget: 600,          // target word count for generated reports
         worldProgressionLookback: 20,             // number of recent chat messages to include (0 = disabled)
         worldProgressionHistoryLookback: 0,       // number of historical reports to incorporate (0 = include all)
         worldProgressionLastFiredAtMinutes: -1,   // last in-world total-minutes at which a report fired
@@ -372,7 +371,6 @@ Example: [[FAC: Iron Syndicate | ...]]  NOT  [[FAC: Khelt :: Iron Syndicate | ..
     }
     if (s.worldEngineIntervalHours !== undefined) { s.worldProgressionIntervalHours = s.worldEngineIntervalHours; delete s.worldEngineIntervalHours; }
     if (s.worldEngineKeepActive !== undefined) { s.worldProgressionKeepActive = s.worldEngineKeepActive; delete s.worldEngineKeepActive; }
-    if (s.worldEngineWordTarget !== undefined) { s.worldProgressionWordTarget = s.worldEngineWordTarget; delete s.worldEngineWordTarget; }
     if (s.worldEngineLastFiredAtMinutes !== undefined) { s.worldProgressionLastFiredAtMinutes = s.worldEngineLastFiredAtMinutes; delete s.worldEngineLastFiredAtMinutes; }
     if (s.worldEngineLastFiredPeriodLabel !== undefined) { s.worldProgressionLastFiredPeriodLabel = s.worldEngineLastFiredPeriodLabel; delete s.worldEngineLastFiredPeriodLabel; }
 
