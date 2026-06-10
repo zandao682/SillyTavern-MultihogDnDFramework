@@ -10,52 +10,6 @@ I wasn't satisfied with any of the commercial offerings available (AI Realm, AI 
 
 ---
 
-## 🚀 What's New in v3.0.0
-
-The biggest update yet — a complete overhaul of the rendering engine, AI-assisted configuration tools, and combat balancing.
-
-### 🎨 Universal Inline Rendering Engine
-The rendering system has been rebuilt from the ground up. **20+ rendering tags** are now available and work **inline anywhere** — no longer restricted to the start of a line. Use them freely across stock fields, custom fields, and quest logs.
-
-- **Color Bars**: `((BAR))`, `((BARRED))`, `((BARBLUE))`, `((BARGREEN))`, `((BARYELLOW))`, `((BARPURPLE))`, `((BARORANGE))`, `((XPBAR))`
-- **Status Pills**: `((PILLS))`, `((PILLRED))`, `((PILLGREEN))`, `((PILLBLUE))` — with optional tooltip descriptions via parentheses (e.g. `Bleeding (1d4 dmg)`)
-- **Alert Badges**: `((WARNING))`, `((DANGER))`, `((SUCCESS))`, `((INFO))`, `((BADGE))`
-- **Economy Coins**: `((GOLD))`, `((SILVER))`, `((BRONZE))`, `((DOLLAR))`
-- **Creative Tags**: `((HEART))`, `((SKULL))`, `((SOUL))`, `((ROLL))`, `((HIGHLIGHT))`
-- **Quest Tags**: `((OBJ))`, `((REWARD))`, `((DIFFICULTY))`, `((PROGRESS))`
-
-### 📚 Rendering Tags Library
-A new interactive popup accessible from settings that renders **live, pixel-perfect previews** of every available tag using your active theme. No more guessing what a tag looks like — see it exactly as it appears in the tracker.
-
-### 🪄 AI Custom Field Creator
-Press **"Add Custom (AI)"** and describe what you want to track in plain language. The AI generates a fully configured field complete with:
-- Field name, icon, and tracking instructions
-- `FORMAT:` and `EXAMPLE:` sections so the gameplay AI knows exactly how to render it
-- Automatic rendering tag selection from the full library
-- Full system prompt awareness — if the mechanic already exists in your sysprompt, the AI bases its field off that system
-
-### 🛠️ AI Section Builder
-Describe a new game mechanic in plain text and the AI generates a complete XML-tagged sysprompt section. It reads your **entire current system prompt** first to ensure seamless, non-redundant integration. Preview before approving.
-
-### ⚔️ Dynamic Enemy HP Scaling
-Enemy difficulty now scales intelligently based on quest context:
-- **Very Easy / Easy**: Enemies below or near player level
-- **Normal**: Roughly at player level
-- **Hard / Very Hard**: Brutal — Hard rewards smart play, Very Hard demands perfection
-- **No quest active**: Pure narrative context, no hand-holding
-
-### 🏆 Inventory & Combat Upgrades
-- **Rarity Classification**: All inventory items now display `[Common]`, `[Uncommon]`, `[Rare]`, `[Epic]`, `[Legendary]`, or `[Artifact]` tags with emojis and estimated worth
-- **Worth Tooltips**: Item value is hidden from display and revealed on hover
-- **Legendary NPC Tier**: New world-threat tier with HP 150–500+, AC 19–22, ATK +11 to +15
-- **Emergent Quest System**: No more formal NPC acceptance required — pursue a goal through action and it's automatically tracked
-
-### 🔬 State Tracker Full Review Modes
-- **Half Review Mode**: Medium-intensity — adjusts prompts to request complete output with balanced token usage
-- **Full Review Mode — Aggressive**: Completely rewrites the system prompt to forcefully demand every single field is updated. Nothing gets missed.
-
----
-
 ### The Core Components:
 
 1. 🖥️ **RPG State Tracker** — Extracts and maintains HP, inventory, party, buffs, XP, spells, and more via a dedicated second-pass model. Injects a rolling State Memo back into each prompt to keep the AI (and you) on track.
@@ -63,8 +17,9 @@ Enemy difficulty now scales intelligently based on quest context:
    - **RNG Queue (Combat)**: Pre-seeded deterministic dice injected into every turn for high-speed, zero-latency combat resolution, neatly within a single output. Sidesteps the unreliability and massive input token costs of tool chains.
    - **Tool Call RNG (Narrative)**: A proactive AI-driven rolling system for non-combat skill checks. Features a "Waterproof" commitment logic where the AI must declare a DC before seeing the result, preventing narrative sycophancy and cheating.
 3. 🤖 **The Lorebook Agent** — A fully autonomous lorebook manager that creates, updates, activates, and deactivates lorebooks for you in the background. Handles the macroscopic consistency of your adventure. Includes cleanup tools, full audit chunking, and an automated World Engine that generates daily background reports for off-screen NPC actions and faction events.
+4. 🌍 **World Progression** - A system that creates daily (or more frequent) reports about NPC/world affairs using existing lore entries as well as an optional world "skeleton" created beforehand. The world moves regardless of you in the background.
 
-Together they solve the three core problems of LLM tabletop RP: the AI forgetting your inventory/spells, the AI forgetting long-term context, and you always winning (aka. plot armor). I have high confidence in the system's reliability—you can just play and not worry about tinkering with much of anything.
+Together they solve the four core problems of LLM tabletop RP: the AI forgetting your inventory/spells, the AI forgetting long-term context, you always winning (aka. plot armor), and the world being static outside of the immediate player's bubble. I have high confidence in the system's reliability—you can just play and not worry about tinkering with much of anything.
 
 ---
 
@@ -110,9 +65,6 @@ Together they solve the three core problems of LLM tabletop RP: the AI forgettin
 2. **Auto-Tracking:** As you roleplay, the extension intelligently parses assistant responses. It detects losses of HP, new loot, or combat triggers, stitching together multi-part tool-call responses and running background passes to update the state.
 3. **Prompt Injection & Execution:** The State Memo and RNG Queue are injected seamlessly into your outgoing prompt to act as the "source of truth." For narrative actions, the framework dynamically catches and resolves the AI's `RollTheDice` tool calls.
 4. **Validation:** Use the Delta Log (δ) to verify changes. If the AI ever makes a mistake, step backwards using the Snapshot Navigation (←/→) to restore a clean state. Not really needed much in my experience, but the option is there.
-
-## Basic Video Walkthrough of the RNG System
-https://www.youtube.com/watch?v=1n5x7VBJ0IU
 
 ## Suggested Companions
 
