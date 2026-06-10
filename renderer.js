@@ -828,6 +828,10 @@ const DEFAULT_XP_COLOR = 'linear-gradient(90deg, #0088ff, #00d4ff)';
                             <input type="radio" name="rt_onboarding_rng_mode" value="legacy" id="rt_onboarding_rng_legacy" />
                             <span>Legacy RNG (Pre-Seeded Only)</span>
                         </label>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="radio" name="rt_onboarding_rng_mode" value="none" id="rt_onboarding_rng_none" />
+                            <span>No RNG (Disable pre-seeded queue and tool)</span>
+                        </label>
                     </div>
 
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 2px;">

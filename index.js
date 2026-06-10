@@ -398,9 +398,11 @@ function syncOnboardingUI() {
     // RNG Mode Sync
     const rngHybrid = /** @type {HTMLInputElement|null} */ (onboarding.querySelector('#rt_onboarding_rng_hybrid'));
     const rngLegacy = /** @type {HTMLInputElement|null} */ (onboarding.querySelector('#rt_onboarding_rng_legacy'));
-    if (rngHybrid && rngLegacy) {
-        rngHybrid.checked = !!s.diceFunctionTool;
-        rngLegacy.checked = !s.diceFunctionTool;
+    const rngNone = /** @type {HTMLInputElement|null} */ (onboarding.querySelector('#rt_onboarding_rng_none'));
+    if (rngHybrid && rngLegacy && rngNone) {
+        rngHybrid.checked = s.rngEnabled && !!s.diceFunctionTool;
+        rngLegacy.checked = s.rngEnabled && !s.diceFunctionTool;
+        rngNone.checked = !s.rngEnabled;
     }
 
     // Quests Enabled Sync
@@ -2552,15 +2554,17 @@ function bindRenderedCardEvents(el, memo, isDetachedContext = false, onRefresh =
         // Sync the main settings panel if it exists
         const rngHybrid = /** @type {HTMLInputElement|null} */ (document.getElementById('rpg_rng_hybrid'));
         const rngLegacy = /** @type {HTMLInputElement|null} */ (document.getElementById('rpg_rng_legacy'));
+        const rngNone = /** @type {HTMLInputElement|null} */ (document.getElementById('rpg_rng_none'));
         const questsCb = /** @type {HTMLInputElement|null} */ (document.getElementById('rpg_sysprompt_mod_quests'));
         const deadlinesCb = /** @type {HTMLInputElement|null} */ (document.getElementById('rpg_quests_deadlines'));
         const frustrationCb = /** @type {HTMLInputElement|null} */ (document.getElementById('rpg_quests_frustration'));
         const qmStandard = /** @type {HTMLInputElement|null} */ (document.getElementById('rpg_quest_standard'));
         const qmLegacy = /** @type {HTMLInputElement|null} */ (document.getElementById('rpg_quest_legacy'));
 
-        if (rngHybrid && rngLegacy) {
-            rngHybrid.checked = !!fresh.diceFunctionTool;
-            rngLegacy.checked = !fresh.diceFunctionTool;
+        if (rngHybrid && rngLegacy && rngNone) {
+            rngHybrid.checked = fresh.rngEnabled && !!fresh.diceFunctionTool;
+            rngLegacy.checked = fresh.rngEnabled && !fresh.diceFunctionTool;
+            rngNone.checked = !fresh.rngEnabled;
         }
         if (questsCb) questsCb.checked = fresh.syspromptModules?.quests !== false;
         if (deadlinesCb) deadlinesCb.checked = !!fresh.syspromptModules?.questsDeadlines;
@@ -2607,10 +2611,25 @@ function bindRenderedCardEvents(el, memo, isDetachedContext = false, onRefresh =
     // RNG Mode Sync
     const onboardingRngInputs = el.querySelectorAll('input[name="rt_onboarding_rng_mode"]');
     onboardingRngInputs.forEach(input => {
-        input.checked = (input.value === (s.diceFunctionTool ? 'hybrid' : 'legacy'));
+        let expectedValue = 'hybrid';
+        if (!s.rngEnabled) {
+            expectedValue = 'none';
+        } else if (!s.diceFunctionTool) {
+            expectedValue = 'legacy';
+        }
+        input.checked = (input.value === expectedValue);
         input.addEventListener('change', () => {
             syncSettingsAndUI(settings => {
-                settings.diceFunctionTool = (input.value === 'hybrid');
+                if (input.value === 'hybrid') {
+                    settings.rngEnabled = true;
+                    settings.diceFunctionTool = true;
+                } else if (input.value === 'legacy') {
+                    settings.rngEnabled = true;
+                    settings.diceFunctionTool = false;
+                } else {
+                    settings.rngEnabled = false;
+                    settings.diceFunctionTool = false;
+                }
             });
         });
     });
@@ -6545,6 +6564,7 @@ function buildSysprompt(rawText) {
     let content = rawText
         .replace(/<(\w[\w_-]*)>([\s\S]*?)<\/\1>/g, (match, tag) => {
             if (mods[tag] === false) return '';
+            if (tag === 'rng_system' && !s.rngEnabled) return '';
             // Inject correct instructions for quests based on legacy mode
             if (tag === 'quests') {
                 let instruction = s.questLegacyMode ? QUESTS_NARRATOR_LEGACY : QUESTS_NARRATOR_MODERN;
@@ -8168,11 +8188,16 @@ Return ONLY the XML section. No explanation, no other text.`;
             });
         }
 
-        // RNG Mode (Hybrid vs Legacy)
+        // RNG Mode (Hybrid vs Legacy vs None)
         const rngModeRadios = document.querySelectorAll('input[name="rpg_sysprompt_rng_mode"]');
         if (rngModeRadios.length) {
             const s = getSettings();
-            let currentRngMode = (s.rngEnabled && s.diceFunctionTool === false) ? 'legacy' : 'hybrid';
+            let currentRngMode = 'hybrid';
+            if (!s.rngEnabled) {
+                currentRngMode = 'none';
+            } else if (s.diceFunctionTool === false) {
+                currentRngMode = 'legacy';
+            }
             $(`input[name="rpg_sysprompt_rng_mode"][value="${currentRngMode}"]`).prop('checked', true);
 
             $('input[name="rpg_sysprompt_rng_mode"]').on('change', function () {
@@ -8182,9 +8207,14 @@ Return ONLY the XML section. No explanation, no other text.`;
                     fresh.rngEnabled = true;
                     fresh.diceFunctionTool = true;
                     registerDiceFunctionTool();
-                } else {
+                } else if (val === 'legacy') {
                     fresh.rngEnabled = true;
                     fresh.diceFunctionTool = false;
+                    registerDiceFunctionTool();
+                } else {
+                    fresh.rngEnabled = false;
+                    fresh.diceFunctionTool = false;
+                    registerDiceFunctionTool();
                 }
                 saveSettings();
                 scheduleAutoApply();
