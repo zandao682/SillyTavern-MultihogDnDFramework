@@ -460,6 +460,40 @@ const DEFAULT_XP_COLOR = 'linear-gradient(90deg, #0088ff, #00d4ff)';
 
 
 
+// ── Portrait rendering helpers ──────────────────────────────────────────────
+
+/**
+ * Returns the inner HTML for the portrait box of an entity.
+ * Checks customPortraits (per-chat) first; falls back to a placeholder icon.
+ * @param {string} entityName
+ * @returns {string}
+ */
+function renderPortraitHtml(entityName) {
+    const s = getSettings();
+    const src = (s.customPortraits || {})[entityName];
+    if (src) {
+        return `<img class="rt-entity-portrait" src="${escapeHtml(src)}" alt="${escapeHtml(entityName)}" />`;
+    }
+    return `<i class="fa-solid fa-user-shield rt-entity-portrait-placeholder" aria-hidden="true"></i>`;
+}
+
+/**
+ * Wraps entity content HTML in a flex container with a portrait box on the left.
+ * Returns content unmodified when enablePortraits is false.
+ * @param {string} entityName
+ * @param {string} contentHtml
+ * @returns {string}
+ */
+function wrapEntityHtml(entityName, contentHtml) {
+    if (!getSettings().enablePortraits) return contentHtml;
+    return `<div class="rt-entity-container" data-entity-name="${escapeHtml(entityName)}">
+        <div class="rt-entity-portrait-container" title="Drop image here or click to set portrait">
+            ${renderPortraitHtml(entityName)}
+        </div>
+        <div class="rt-entity-content">${contentHtml}</div>
+    </div>`;
+}
+
     export function blockToItems(tag, content, renderTypeOverride = null) {
         const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
         let renderType = renderTypeOverride || tag;
@@ -559,7 +593,15 @@ const DEFAULT_XP_COLOR = 'linear-gradient(90deg, #0088ff, #00d4ff)';
                         results.push(`<div class="rt-card-item">${escapeHtmlWithColor(rawLine)}</div>`);
                     }
                 }
-                return results;
+                // Wrap each entity's accumulated HTML in portrait container before returning
+                return results.map((html, idx) => {
+                    // Only wrap entity rows (ones that have the entity-row class start), not round headers
+                    if (html.startsWith('<div class="rt-combat-round">')) return html;
+                    // Extract entity name from the first rt-entity-name span
+                    const nameMatch = html.match(/class="rt-entity-name"[^>]*>([^<]+)</);
+                    if (!nameMatch) return html;
+                    return wrapEntityHtml(nameMatch[1].trim(), html);
+                });
             }
 
             case 'TIME': {

@@ -789,6 +789,7 @@ function loadChatState(chatId) {
     if (saved.blockOrder) s.blockOrder = JSON.parse(JSON.stringify(saved.blockOrder));
     if (saved.stockPrompts) s.stockPrompts = JSON.parse(JSON.stringify(saved.stockPrompts));
     if (saved.customFields) s.customFields = JSON.parse(JSON.stringify(saved.customFields));
+    s.customPortraits = JSON.parse(JSON.stringify(saved.customPortraits || {}));
     // quests are derived from currentMemo, do not load independently
     s.quests = [];
     s.historyIndex = saved.historyIndex ?? -1;
@@ -2731,6 +2732,153 @@ function bindRenderedCardEvents(el, memo, isDetachedContext = false, onRefresh =
         };
         document.addEventListener('click', _pillDeselectHandler);
     }
+
+    // ── Portrait drag-drop and click handlers ─────────────────────────────────
+    el.querySelectorAll('.rt-entity-portrait-container').forEach(container => {
+        const entityName = container.closest('.rt-entity-container')?.dataset?.entityName || '';
+        if (!entityName) return;
+
+        // Compress an image File to a Base64 data URL via canvas (max 128×128)
+        const fileToPortraitDataUrl = (file) => new Promise((resolve, reject) => {
+            if (!file || !file.type.startsWith('image/')) return reject(new Error('Not an image'));
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const img = new Image();
+                img.onload = () => {
+                    const MAX = 128;
+                    const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+                    const canvas = document.createElement('canvas');
+                    canvas.width  = Math.round(img.width  * scale);
+                    canvas.height = Math.round(img.height * scale);
+                    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                    resolve(canvas.toDataURL('image/jpeg', 0.85));
+                };
+                img.onerror = reject;
+                img.src = ev.target.result;
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+
+        const applyPortrait = (src) => {
+            const s = getSettings();
+            if (!s.customPortraits) s.customPortraits = {};
+            if (src) {
+                s.customPortraits[entityName] = src;
+            } else {
+                delete s.customPortraits[entityName];
+            }
+            saveSettings();
+            refresh();
+        };
+
+        container.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            container.classList.add('dragover');
+        });
+
+        container.addEventListener('dragleave', (e) => {
+            e.stopPropagation();
+            container.classList.remove('dragover');
+        });
+
+        container.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            container.classList.remove('dragover');
+            const file = e.dataTransfer?.files?.[0];
+            if (file && file.type.startsWith('image/')) {
+                try {
+                    const dataUrl = await fileToPortraitDataUrl(file);
+                    applyPortrait(dataUrl);
+                } catch { toastr['warning']('Could not read image file.', 'RPG Tracker'); }
+                return;
+            }
+            const url = e.dataTransfer?.getData('text/plain')?.trim();
+            if (url && /^https?:\/\//i.test(url)) {
+                applyPortrait(url);
+            } else {
+                toastr['warning']('Drop an image file or drag an image URL from a browser.', 'RPG Tracker');
+            }
+        });
+
+        container.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const s = getSettings();
+            const currentSrc = (s.customPortraits || {})[entityName] || '';
+            const previewHtml = currentSrc
+                ? `<img src="${currentSrc}" style="max-width:128px;max-height:128px;border-radius:6px;display:block;margin:0 auto 10px;"/>`
+                : `<div style="text-align:center;opacity:0.5;margin-bottom:10px;">No portrait set</div>`;
+            const inputId     = `rt-portrait-url-${Date.now()}`;
+            const fileId      = `rt-portrait-file-${Date.now()}`;
+            const browseBtnId = `rt-portrait-browse-${Date.now()}`;
+            const popupContent = `<div style="padding:10px;min-width:270px;">
+                    <b style="display:block;margin-bottom:8px;">Set Portrait \u2014 ${entityName}</b>
+                    ${previewHtml}
+                    <label style="display:block;margin-bottom:4px;font-size:0.85em;opacity:0.8;">Image URL (https://\u2026)</label>
+                    <div style="display:flex;gap:6px;align-items:center;">
+                        <input id="${inputId}" type="text" class="text_pole" placeholder="Paste an image URL\u2026" value="${currentSrc.startsWith('http') ? currentSrc : ''}" style="flex:1;box-sizing:border-box;"/>
+                        <button id="${browseBtnId}" class="menu_button" style="white-space:nowrap;flex-shrink:0;">Browse\u2026</button>
+                    </div>
+                    <input id="${fileId}" type="file" accept="image/*" style="display:none"/>
+                    <div style="font-size:0.78em;opacity:0.55;margin-top:5px;">Or drag &amp; drop an image file directly onto the portrait box.</div>
+                </div>`;
+            const ctx = SillyTavern.getContext();
+            if (!ctx.callGenericPopup) { toastr['warning']('Popup API not available.', 'RPG Tracker'); return; }
+            const popupOpts = { okButton: 'Apply', cancelButton: 'Cancel', wide: false };
+            if (currentSrc) {
+                popupOpts.customButtons = [{ text: '\ud83d\uddd1 Clear Portrait', result: 2, classes: ['menu_button'] }];
+            }
+
+            // capturedUrl is the source of truth — updated while the popup is open.
+            // We CANNOT read DOM elements after callGenericPopup resolves because the
+            // popup HTML is torn down before our code after the await runs.
+            let capturedUrl = currentSrc.startsWith('http') ? currentSrc : '';
+
+            setTimeout(() => {
+                const fileInput = /** @type {HTMLInputElement|null} */ (document.getElementById(fileId));
+                const browseBtn = document.getElementById(browseBtnId);
+                const urlInput  = /** @type {HTMLInputElement|null} */ (document.getElementById(inputId));
+
+                // Track whatever the user types into the URL field
+                if (urlInput) {
+                    urlInput.addEventListener('input', () => { capturedUrl = urlInput.value.trim(); });
+                }
+
+                if (browseBtn && fileInput) {
+                    browseBtn.addEventListener('click', (ev) => {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        fileInput.click();
+                    });
+                    fileInput.addEventListener('change', async () => {
+                        const file = fileInput.files?.[0];
+                        if (!file) return;
+                        try {
+                            const dataUrl = await fileToPortraitDataUrl(file);
+                            capturedUrl = dataUrl;
+                            // Also show in the text field so the user knows it worked
+                            if (urlInput) urlInput.value = '(local file selected \u2714)';
+                        } catch { toastr['warning']('Could not read image file.', 'RPG Tracker'); }
+                    });
+                }
+            }, 0);
+
+            const result = await ctx.callGenericPopup(popupContent, ctx.POPUP_TYPE?.CONFIRM ?? 1, '', popupOpts);
+            if (result === 2) {
+                applyPortrait(null);
+            } else if (result) {
+                // capturedUrl was set by input/change events while the popup was open
+                if (capturedUrl && (capturedUrl.startsWith('data:image/') || /^https?:\/\//i.test(capturedUrl))) {
+                    applyPortrait(capturedUrl);
+                } else if (capturedUrl) {
+                    toastr['warning']('Please enter a valid https:// URL or use the Browse button.', 'RPG Tracker');
+                }
+            }
+        });
+
+    });
 }
 
 function refreshRenderedView() {
@@ -2816,6 +2964,7 @@ function createDetachedPanel(tag) {
     const panel = document.createElement('div');
     panel.id = `rt-detached-panel-${tag}`;
     panel.className = `rpg-tracker-panel rpg-tracker-detached-panel ${settings.trackerTheme || 'rt-theme-native'}`;
+    panel.style.height = '300px'; // default; overridden by saved geometry
     panel.innerHTML = `
             <div class="rpg-tracker-header rt-detached-header">
                 <div class="rpg-tracker-header-left">
@@ -2828,6 +2977,8 @@ function createDetachedPanel(tag) {
             <div class="rpg-tracker-content rpg-tracker-detached-body">
                 <!-- Content injected here via refreshRenderedView() -->
             </div>
+            <div class="rt-resizer-br rt-detached-resizer-br" title="Resize"></div>
+            <div class="rt-resizer-bl rt-detached-resizer-bl" title="Resize"></div>
         `;
 
     document.body.appendChild(panel);
@@ -2837,8 +2988,82 @@ function createDetachedPanel(tag) {
         makeDraggable(panel, header, `rpg_tracker_geometry_${tag}`);
     }
 
-    // Setup specialized geometry keys
+    // Per-tag geometry key (same key used by makeDraggable above)
     const geoKey = `rpg_tracker_geometry_${tag}`;
+
+    // Save helper scoped to this detached panel's key
+    const saveDetachedGeo = () => {
+        const rect = panel.getBoundingClientRect();
+        localStorage.setItem(geoKey, JSON.stringify({
+            left: rect.left, top: rect.top,
+            width: rect.width, height: rect.height
+        }));
+    };
+
+    // Wire up the BR resizer (bottom-right: drag right/down)
+    const resizerBR = /** @type {HTMLElement} */ (panel.querySelector('.rt-detached-resizer-br'));
+    if (resizerBR) {
+        let startX, startY, startW, startH, startTop, startLeft;
+        resizerBR.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0) return;
+            resizerBR.setPointerCapture(e.pointerId);
+            const rect = panel.getBoundingClientRect();
+            startX = e.clientX; startY = e.clientY;
+            startW = rect.width; startH = rect.height;
+            startTop = rect.top; startLeft = rect.left;
+            panel.style.left = startLeft + 'px'; panel.style.top = startTop + 'px';
+            panel.style.right = 'auto'; panel.style.bottom = 'auto';
+            panel.style.maxHeight = 'none';
+            e.preventDefault(); e.stopPropagation();
+        });
+        resizerBR.addEventListener('pointermove', (e) => {
+            if (!resizerBR.hasPointerCapture(e.pointerId)) return;
+            panel.style.width  = Math.max(220, startW + (e.clientX - startX)) + 'px';
+            panel.style.height = Math.max(120, startH + (e.clientY - startY)) + 'px';
+        });
+        resizerBR.addEventListener('pointerup', (e) => {
+            try { resizerBR.releasePointerCapture(e.pointerId); } catch(_){}
+            saveDetachedGeo();
+        });
+        resizerBR.addEventListener('pointercancel', (e) => {
+            try { resizerBR.releasePointerCapture(e.pointerId); } catch(_){}
+        });
+    }
+
+    // Wire up the BL resizer (bottom-left: drag left expands width, down expands height)
+    const resizerBL = /** @type {HTMLElement} */ (panel.querySelector('.rt-detached-resizer-bl'));
+    if (resizerBL) {
+        let startX, startY, startW, startH, startTop, startLeft;
+        resizerBL.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0) return;
+            resizerBL.setPointerCapture(e.pointerId);
+            const rect = panel.getBoundingClientRect();
+            startX = e.clientX; startY = e.clientY;
+            startW = rect.width; startH = rect.height;
+            startTop = rect.top; startLeft = rect.left;
+            panel.style.left = startLeft + 'px'; panel.style.top = startTop + 'px';
+            panel.style.right = 'auto'; panel.style.bottom = 'auto';
+            panel.style.maxHeight = 'none';
+            e.preventDefault(); e.stopPropagation();
+        });
+        resizerBL.addEventListener('pointermove', (e) => {
+            if (!resizerBL.hasPointerCapture(e.pointerId)) return;
+            const dx = e.clientX - startX;
+            const newW = Math.max(220, startW - dx);
+            if (newW > 220) {
+                panel.style.width = newW + 'px';
+                panel.style.left  = (startLeft + dx) + 'px';
+            }
+            panel.style.height = Math.max(120, startH + (e.clientY - startY)) + 'px';
+        });
+        resizerBL.addEventListener('pointerup', (e) => {
+            try { resizerBL.releasePointerCapture(e.pointerId); } catch(_){}
+            saveDetachedGeo();
+        });
+        resizerBL.addEventListener('pointercancel', (e) => {
+            try { resizerBL.releasePointerCapture(e.pointerId); } catch(_){}
+        });
+    }
 
     try {
         const saved = JSON.parse(localStorage.getItem(geoKey));
@@ -2849,7 +3074,7 @@ function createDetachedPanel(tag) {
 
             panel.style.left = left + 'px'; panel.style.right = 'auto';
             panel.style.top = top + 'px'; panel.style.bottom = 'auto';
-            if (saved.width) panel.style.width = saved.width + 'px';
+            if (saved.width)  panel.style.width  = saved.width  + 'px';
             if (saved.height) panel.style.height = saved.height + 'px';
         } else {
             const mainPanel = document.getElementById('rpg-tracker-panel');
@@ -2865,20 +3090,6 @@ function createDetachedPanel(tag) {
             }
         }
     } catch { /* ignore */ }
-
-    // Debounced save geometry
-    let _resizeTimer;
-    const ro = new ResizeObserver(() => {
-        clearTimeout(_resizeTimer);
-        _resizeTimer = setTimeout(() => {
-            const rect = panel.getBoundingClientRect();
-            localStorage.setItem(geoKey, JSON.stringify({
-                left: rect.left, top: rect.top,
-                width: rect.width, height: rect.height
-            }));
-        }, 300);
-    });
-    ro.observe(panel);
 
     panel.querySelector('.rt-reattach-btn').addEventListener('click', () => {
         const detached = loadDetached();
@@ -6626,6 +6837,12 @@ function buildSysprompt(rawText) {
         $('#rpg_tracker_debug').prop('checked', settings.debugMode).on('change', function () {
             settings.debugMode = !!$(this).prop('checked');
             saveSettings();
+        });
+
+        $('#rpg_tracker_enable_portraits').prop('checked', settings.enablePortraits !== false).on('change', function () {
+            settings.enablePortraits = !!$(this).prop('checked');
+            saveSettings();
+            refreshRenderedView();
         });
 
         // RNG Help Popup Trigger (Settings)
