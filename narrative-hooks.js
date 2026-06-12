@@ -354,6 +354,25 @@ export function installInterceptor() {
             return;
         }
 
+        // Strip RT_CUSTOM_LIBRARY comment markers from all messages before sending to AI.
+        // These markers exist in the textarea for idempotent re-injection management,
+        // but should be invisible to the model to avoid skewing attention weights.
+        const rtCommentRe = /^[ \t]*<!--\s*RT_CUSTOM_LIBRARY_(START|END)\s*-->[ \t]*\r?\n?/gm;
+        for (const m of chat) {
+            if (typeof m.content === 'string') {
+                m.content = m.content.replace(rtCommentRe, '');
+            } else if (Array.isArray(m.content)) {
+                for (const part of m.content) {
+                    if (part && typeof part.text === 'string') {
+                        part.text = part.text.replace(rtCommentRe, '');
+                    }
+                }
+            }
+            if (typeof m.mes === 'string') {
+                m.mes = m.mes.replace(rtCommentRe, '');
+            }
+        }
+
         let idx = -1;
         
         // 1. Check for explicit user roles (case insensitive) or ST internal flag
