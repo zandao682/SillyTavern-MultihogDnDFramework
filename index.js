@@ -9352,6 +9352,31 @@ RULES:
             }
         });
 
+        const $wpConsolidateCount = $('#rpg_world_progression_consolidate_count');
+        const $wpConsolidateNow = $('#rpg_world_progression_btn_consolidate_now');
+
+        $wpConsolidateNow.on('click', async function () {
+            const count = parseInt(String($wpConsolidateCount.val() || '')) || 7;
+            if (count < 2) {
+                toastr['warning']('Please enter a count of at least 2 reports to consolidate.', 'World Progression');
+                return;
+            }
+            if (!confirm(`Are you sure you want to consolidate the oldest ${count} raw reports right now?`)) {
+                return;
+            }
+
+            const { runWorldProgressionConsolidationPass } = await import('./router.js');
+            $wpConsolidateNow.prop('disabled', true).text('Consolidating…');
+            try {
+                const label = await runWorldProgressionConsolidationPass(count);
+                toastr['success'](`Consolidated into "${label}".`, 'World Progression');
+            } catch (e) {
+                toastr['error'](`Consolidation error: ${e.message}`, 'World Progression');
+            } finally {
+                $wpConsolidateNow.prop('disabled', false).html('<i class="fa-solid fa-compress"></i> Consolidate Now');
+            }
+        });
+
         // ── World Skeleton wiring ───────────────────────────────────────────────
         const $wpSkeletonTheme = $('#rpg_world_progression_skeleton_theme');
         const $wpSkeletonFactions = $('#rpg_world_progression_skeleton_factions');

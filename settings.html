@@ -519,6 +519,18 @@
                             <div style="font-size: 0.75em; opacity: 0.55; margin-top: -2px;">Batch size is count-based, not time-based — 7 reports at 12h/report ≈ 3.5 in-world days per batch.</div>
                         </div>
 
+                        <div style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 8px;">
+                            <label style="font-size: 0.85em; font-weight: bold; opacity: 0.8; display: block; margin-bottom: 4px;">Manual Consolidation
+                                <i class="fa-solid fa-circle-question interactable" style="font-size: 0.85em; opacity: 0.7; margin-left: 4px;" title="Consolidate a chosen number of older reports into a single entry right now."></i>
+                            </label>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <input id="rpg_world_progression_consolidate_count" type="text" inputmode="numeric" pattern="[0-9]*" class="text_pole" value="7" style="max-width: 80px; text-align: center;" title="Number of raw reports to consolidate" />
+                                <button id="rpg_world_progression_btn_consolidate_now" class="menu_button interactable" style="margin: 0; padding: 4px 10px; font-size: 0.8em; flex: 1;">
+                                    <i class="fa-solid fa-compress"></i> Consolidate Now
+                                </button>
+                            </div>
+                        </div>
+
                         <hr style="margin: 6px 0;">
 
                         <!-- ── SECTION: FOCUS RANDOMIZATION ── -->

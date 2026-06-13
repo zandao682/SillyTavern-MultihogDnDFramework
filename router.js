@@ -3157,3 +3157,146 @@ Synthesize the above into one complete, up-to-date lore entry.`;
     broadcastStep('thought', `\uD83D\uDDE6 Skeleton Promotion: "${newLabel}" promoted with ${historySnippets.length} history reference(s).`);
     return { label: newLabel, content: (mergedContent || '').trim(), category };
 }
+
+/**
+ * Manually consolidates a specific number of raw World Progression reports.
+ * @param {number} targetCount - Number of raw reports to consolidate.
+ * @returns {Promise<string>} - The consolidated label (e.g., "Days 1-7").
+ */
+export async function runWorldProgressionConsolidationPass(targetCount) {
+    const settings = getSettings();
+    const prefix = getLivePrefix();
+    const worldBookName = prefix ? `${prefix}_World` : 'World';
+
+    const routerSettings = {
+        connectionSource: settings.routerConnectionSource || 'default',
+        connectionProfileId: settings.routerConnectionProfileId,
+        completionPresetId: settings.routerCompletionPresetId,
+        ollamaUrl: settings.routerOllamaUrl,
+        ollamaModel: settings.routerOllamaModel,
+        openaiUrl: settings.routerOpenaiUrl,
+        openaiKey: settings.routerOpenaiKey,
+        openaiModel: settings.routerOpenaiModel,
+    };
+
+    const ctx = SillyTavern.getContext();
+    if (typeof ctx.updateWorldInfoList === 'function') {
+        try { await ctx.updateWorldInfoList(); } catch (_) {}
+    }
+
+    const allBookNames = await getWorldInfoNamesSafe();
+    const archiveBooks = {};
+    for (const n of allBookNames) {
+        if (prefix && !bookBelongsToPrefix(n, prefix)) continue;
+        try {
+            const b = await ctx.loadWorldInfo(n);
+            if (b?.entries) archiveBooks[n] = b;
+        } catch (_) {}
+    }
+
+    const currentWorldBook = archiveBooks[worldBookName] ?? null;
+    if (!currentWorldBook?.entries) {
+        throw new Error(`World lorebook "${worldBookName}" not found or empty.`);
+    }
+
+    // Sort entries chronologically by UID
+    const allWorldEntries = Object.entries(currentWorldBook.entries)
+        .sort(([a], [b]) => Number(a) - Number(b));
+
+    const isRawReport = (label) => {
+        if (!/^day\s+\d+/i.test(label)) return false;
+        if (/days?\s+\d+\s*[\-\u2013\u2014]\s*\d+/i.test(label)) return false;
+        if (/condensed|compressed|merged|summary/i.test(label)) return false;
+        return true;
+    };
+
+    const rawEntries = allWorldEntries.filter(([, e]) =>
+        isRawReport((e.comment || '').trim())
+    );
+
+    if (rawEntries.length < 2) {
+        throw new Error(`Need at least 2 raw reports to consolidate. Found ${rawEntries.length}.`);
+    }
+
+    const countToUse = Math.max(2, Math.min(targetCount || 7, rawEntries.length));
+    const toConsolidate = rawEntries.slice(0, countToUse);
+
+    const rawDump = toConsolidate
+        .map(([, e]) => `### ${(e.comment || '').trim()}\n${(e.content || '').trim()}`)
+        .join('\n\n');
+
+    const dayNums = toConsolidate.map(([, e]) => {
+        const m = (e.comment || '').match(/Day\s+(\d+)/i);
+        return m ? parseInt(m[1], 10) : null;
+    }).filter(n => n !== null);
+    const minDay = dayNums.length ? Math.min(...dayNums) : 1;
+    const maxDay = dayNums.length ? Math.max(...dayNums) : minDay;
+    const consolidatedLabel = (minDay === maxDay)
+        ? `Day ${minDay} (Condensed)`
+        : `Days ${minDay}\u2013${maxDay}`;
+
+    const consolidationSystemPrompt =
+`You are the World Archivist. Compress the following World Progression reports into a single, unified summary while preserving maximum narrative signal.
+
+## RULES
+1. Merge all reports into a single coherent, present-tense narrative.
+2. Always retain temporal context. The summary MUST begin with the overall period label (e.g. "[${consolidatedLabel}]"). Never remove all temporal markers.
+3. Preserve every unique fact — faction developments, NPC actions, location changes, economic shifts, and plot developments. Never replace detailed facts with generic summaries (e.g. writing "Various events occurred" is a critical failure).
+4. Eliminate only true redundancies — if the same fact repeats across multiple reports, write it once.
+5. Target 40–60% of the combined original token count.
+6. Format: dense prose or tight bullet points, no filler, no markdown headers beyond the period label. 1–2 sentences per development.
+7. Output ONLY the compressed report content. No preamble, no tags, no meta-commentary.`;
+
+    const consolidationUserPrompt =
+`Compress the following ${toConsolidate.length} World Progression reports into a single summary for the period **${consolidatedLabel}**.
+
+${rawDump}`;
+
+    broadcastStep('thought', `\uD83C\uDF0D World Progression: Manually consolidating ${toConsolidate.length} reports into "${consolidatedLabel}"...`);
+
+    const consolidatedContent = await sendStateRequest(routerSettings, consolidationSystemPrompt, consolidationUserPrompt);
+    if (!consolidatedContent || !consolidatedContent.trim()) {
+        throw new Error("LLM returned an empty response during consolidation.");
+    }
+
+    // Reload for fresh write
+    let freshBook = null;
+    try { freshBook = await ctx.loadWorldInfo(worldBookName); } catch (_) {}
+    if (!freshBook?.entries) freshBook = currentWorldBook;
+
+    const allUids = Object.keys(freshBook.entries).map(Number).filter(n => !isNaN(n));
+    const nextUid = allUids.length > 0 ? Math.max(...allUids) + 1 : 0;
+    freshBook.entries[nextUid] = {
+        uid: nextUid,
+        key: [],
+        keysecondary: [],
+        comment: consolidatedLabel,
+        content: consolidatedContent.trim(),
+        constant: false,
+        selective: false, selectiveLogic: 0, addMemo: true,
+        order: settings.routerDefaultOrder ?? 100,
+        position: settings.routerDefaultPosition ?? 0,
+        disable: true,
+        probability: 100, useProbability: false,
+        depth: settings.routerDefaultDepth ?? 4,
+        role: null,
+        group: '', groupOverride: false, groupWeight: 100,
+    };
+
+    const toDeleteUids = toConsolidate.map(([uid]) => uid);
+    for (const uid of toDeleteUids) {
+        delete freshBook.entries[uid];
+        const fullId = `${worldBookName}::${uid}`;
+        settings.activeWorldKeys = (settings.activeWorldKeys || []).filter(k => k !== fullId);
+    }
+
+    await fetch('/api/worldinfo/edit', {
+        method: 'POST',
+        headers: getRequestHeaders(),
+        body: JSON.stringify({ name: worldBookName, data: freshBook })
+    });
+    try { await ctx.saveWorldInfo(worldBookName, freshBook); } catch (_) {}
+
+    broadcastStep('finish', `\uD83C\uDF0D World Progression: "${consolidatedLabel}" consolidated — ${toDeleteUids.length} raw reports removed.`);
+    return consolidatedLabel;
+}
