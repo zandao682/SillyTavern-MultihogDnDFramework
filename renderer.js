@@ -854,6 +854,14 @@ function wrapEntityHtml(entityName, contentHtml) {
                     <div><b style="color: var(--rt-accent);">World Progression 🌍:</b> Simulates off-screen world activity by generating reports of background events at regular in-world intervals (such as daily). You can seed the simulation with an optional <b>World Skeleton</b> to introduce undiscovered factions, locations, NPCs, and conflicts outside the narrative. It includes <b>Focus Randomization</b> to keep events varied, and <b>Backlog Consolidation</b> to periodically compress older reports and prevent token bloat. <i>Configure these options inside the <b>World Progression</b> section of the Extension Settings menu (accessible via SillyTavern's Extensions panel).</i></div>
                 </div>
 
+                <div style="font-size: 13px; opacity: 0.9; margin-top: 12px; flex-shrink: 0; line-height: 1.4; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px;">
+                    <b style="color: var(--rt-accent); font-size: 14px;">Initial Setup:</b><br><br>
+                    1. Use the archetype buttons above to roll a new character, or <b>manually describe a character</b> by clicking 💬.<br><br>
+                    2. Create a character card for your "narrator" (e.g. Game Master). <b>Leave the card fields empty</b>, as the framework handles all logic via the system prompt.<br><br>
+                    3. Toggle the options below — the system prompt is <b>applied automatically</b> whenever you change a setting.<br><br>
+                    💡 <b>Model Recommendation:</b> We highly recommend using <b>Gemini 3.1 Flash Lite</b>. It is 100% reliable for both ReAct tool-use and standard parsing, and is extremely cheap.
+                </div>
+
                 <!-- Narrator Configuration (Salad Bar) -->
                 <div style="margin-top: 12px; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; padding: 10px; background: rgba(255,255,255,0.03); width: 100%; box-sizing: border-box;">
                     <b style="color: var(--rt-accent); font-size: 14px; display: block; margin-bottom: 6px;">Narrator Configuration</b>
@@ -945,13 +953,6 @@ function wrapEntityHtml(entityName, contentHtml) {
                     <button id="rt_onboarding_btn_update_sysprompt" style="width: 100%; margin-top: 10px; padding: 7px 12px; background: rgba(0, 200, 140, 0.18); border: 1px solid #00c88c; border-radius: 4px; color: var(--rt-text, #eee); font-size: 0.88em; cursor: pointer;" title="Writes the system prompt to your Quick Prompt Main box based on the options selected above.">
                         ↑ Apply System Prompt
                     </button>
-                </div>
-
-                <div style="font-size: 13px; opacity: 0.9; margin-top: 12px; flex-shrink: 0; line-height: 1.4; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px;">
-                    <b style="color: var(--rt-accent); font-size: 14px;">Initial Setup:</b><br><br>
-                    1. Use the archetype buttons above to roll a new character, or <b>manually describe a character</b> by clicking 💬.<br><br>
-                    2. Create a character card for your "narrator" (e.g. Game Master). <b>Leave the card fields empty</b>, as the framework handles all logic via the system prompt.<br><br>
-                    3. Toggle the options above — the system prompt is <b>applied automatically</b> whenever you change a setting.
                 </div>
             </div>`;
         }
