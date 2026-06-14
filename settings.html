@@ -689,15 +689,18 @@
                         <textarea id="rpg_world_progression_skeleton_system_prompt" class="text_pole" rows="10" style="width:100%; font-size:0.78em; font-family:monospace; resize:vertical; background:rgba(0,0,0,0.3); color:var(--SmartThemeBodyColor); border:1px solid rgba(255,255,255,0.1); border-radius:4px; padding:6px; box-sizing:border-box; margin-bottom: 6px;" placeholder="System prompt for generating the World Skeleton…"></textarea>
 
                         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                            <button id="rpg_world_progression_btn_generate_skeleton" class="menu_button interactable" style="background: rgba(180, 100, 255, 0.15); border-color: rgba(180, 100, 255, 0.4);">
+                            <button id="rpg_world_progression_btn_generate_skeleton" class="menu_button interactable" style="background: rgba(180, 100, 255, 0.15); border-color: rgba(180, 100, 255, 0.4);" title="Generate a new skeleton (overwrites existing)">
                                 <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Skeleton
+                            </button>
+                            <button id="rpg_world_progression_btn_add_skeleton" class="menu_button interactable" style="background: rgba(180, 100, 255, 0.15); border-color: rgba(180, 100, 255, 0.4);" title="Generate new entries and append them to the existing skeleton">
+                                <i class="fa-solid fa-plus"></i> Add to Skeleton
                             </button>
                             <div id="rpg_world_progression_skeleton_status" style="font-size: 0.78em; opacity: 0.6; font-family: monospace;">
                                 No skeleton generated.
                             </div>
                         </div>
                         <div style="font-size: 0.72em; opacity: 0.5; margin-top: 4px; color: #ffa000;">
-                            <i class="fa-solid fa-triangle-exclamation"></i> Generating a new skeleton will overwrite the existing <code>_Skeleton</code> lorebook for this campaign.
+                            <i class="fa-solid fa-triangle-exclamation"></i> Generating a new skeleton will overwrite the existing <code>_Skeleton</code> lorebook for this campaign. "Add to Skeleton" will append new entries.
                         </div>
 
                     </div><!-- /.flex-container -->

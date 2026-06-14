@@ -2963,12 +2963,23 @@ function parseSkeletonOutput(rawText) {
  * @param {string} theme - User-provided theme/seed for the world
  * @returns {Promise<number>} Number of skeleton entries created
  */
-export async function runSkeletonGenerationPass(theme) {
+export async function runSkeletonGenerationPass(theme, append = false) {
     const settings = getSettings();
     const prefix = getLivePrefix();
     const skeletonBookName = prefix ? `${prefix}_Skeleton` : 'World_Skeleton';
 
     broadcastStep('thought', `\uD83D\uDDE6 World Skeleton: Generating from theme...`);
+
+    const ctx = SillyTavern.getContext();
+    let skeletonBook = null;
+    if (append) {
+        try {
+            skeletonBook = await ctx.loadWorldInfo(skeletonBookName);
+        } catch (_) {}
+    }
+    if (!skeletonBook || !skeletonBook.entries) {
+        skeletonBook = { entries: {}, name: skeletonBookName, scan_depth: 4, token_budget: 400, recursive: false, extensions: {} };
+    }
 
     const factionCount = settings.worldProgressionSkeletonFactions ?? 4;
     const locationCount = settings.worldProgressionSkeletonLocations ?? 4;
@@ -2981,7 +2992,22 @@ export async function runSkeletonGenerationPass(theme) {
         .replace(/\{npcCount\}/g, String(npcCount))
         .replace(/\{conflictCount\}/g, String(conflictCount));
 
-    const userPrompt = `## WORLD THEME / SEED\n${theme || '(No theme provided — generate a generic fantasy world skeleton.)'}\n\nGenerate the world skeleton now.`;
+    // Gather existing entity comments to avoid duplication
+    let existingNamesStr = '';
+    if (append && skeletonBook.entries) {
+        const existingComments = Object.values(skeletonBook.entries)
+            .map(e => e.comment || '')
+            .filter(Boolean);
+        if (existingComments.length > 0) {
+            existingNamesStr = `The following entities already exist in the skeleton: ${existingComments.join(', ')}. Avoid duplicating these or generating entities with similar names.`;
+        }
+    }
+
+    let userPrompt = `## WORLD THEME / SEED\n${theme || '(No theme provided — generate a generic fantasy world skeleton.)'}\n\n`;
+    if (existingNamesStr) {
+        userPrompt += `## EXISTING ENTITIES\n${existingNamesStr}\n\n`;
+    }
+    userPrompt += `Generate ${append ? 'additional' : 'the'} world skeleton ${append ? 'entities' : ''} now.`;
 
     const routerSettings = {
         connectionSource: settings.routerConnectionSource || 'default',
@@ -3012,10 +3038,15 @@ export async function runSkeletonGenerationPass(theme) {
         throw new Error('No parseable skeleton entries');
     }
 
-    // Build the skeleton lorebook from scratch (overwrite)
-    const ctx = SillyTavern.getContext();
-    const skeletonBook = { entries: {}, name: skeletonBookName, scan_depth: 4, token_budget: 400, recursive: false, extensions: {} };
+    // Determine starting uid for new entries
     let uid = 0;
+    if (append && skeletonBook.entries) {
+        const keys = Object.keys(skeletonBook.entries).map(Number);
+        if (keys.length > 0) {
+            uid = Math.max(...keys) + 1;
+        }
+    }
+
     for (const rec of records) {
         const prefixMap = { 'FAC': 'FACTION', 'LOC': 'LOCATION', 'NPC': 'NPC', 'EVENT': 'CONFLICT' };
         const typePrefix = prefixMap[rec.category] || 'ENTITY';

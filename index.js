@@ -9464,6 +9464,7 @@ RULES:
         const $wpSkeletonPrompt = $('#rpg_world_progression_skeleton_system_prompt');
         const $wpResetSkeletonPrompt = $('#rpg_world_progression_btn_reset_skeleton_prompt');
         const $wpGenerateSkeleton = $('#rpg_world_progression_btn_generate_skeleton');
+        const $wpAddSkeleton = $('#rpg_world_progression_btn_add_skeleton');
         const $wpSkeletonStatus = $('#rpg_world_progression_skeleton_status');
 
         /** Refreshes the skeleton entry count label from the _Skeleton lorebook. */
@@ -9545,6 +9546,31 @@ RULES:
                 toastr['error'](`World Skeleton error: ${e.message}`, 'World Skeleton');
             } finally {
                 $wpGenerateSkeleton.prop('disabled', false).html('<i class="fa-solid fa-wand-magic-sparkles"></i> Generate Skeleton');
+            }
+        });
+
+        $wpAddSkeleton.on('click', async function () {
+            const theme = String($wpSkeletonTheme.val() || '').trim();
+            if (!theme) {
+                toastr['warning']('Please enter a world theme or seed before generating.', 'World Skeleton');
+                return;
+            }
+            const ctx = SillyTavern.getContext();
+            const prefix = getEffectiveRouterCampaignPrefix(ctx.chatId || '');
+            if (!prefix) {
+                toastr['warning']('No campaign prefix set. Set a prefix or open a chat in SillyTavern first.', 'World Skeleton');
+                return;
+            }
+            $wpAddSkeleton.prop('disabled', true).html('<i class="fa-solid fa-spinner fa-spin"></i> Adding…');
+            try {
+                const { runSkeletonGenerationPass } = await import('./router.js');
+                const count = await runSkeletonGenerationPass(theme, true);
+                await updateSkeletonStatus();
+                toastr['success'](`World Skeleton updated: ${count} additional entries added.`, 'World Skeleton');
+            } catch (e) {
+                toastr['error'](`World Skeleton error: ${e.message}`, 'World Skeleton');
+            } finally {
+                $wpAddSkeleton.prop('disabled', false).html('<i class="fa-solid fa-plus"></i> Add to Skeleton');
             }
         });
 
