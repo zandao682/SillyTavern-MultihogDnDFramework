@@ -2412,27 +2412,30 @@ function refreshProfileDropdown() {
         names.map(n => `<option value="${escapeHtml(n)}"${n === s.activeProfile ? ' selected' : ''}>${escapeHtml(n)}</option>`).join('');
 }
 
-// Compress an image File to a Base64 data URL via canvas (max 128×128)
-function fileToPortraitDataUrl(file) {
+// Read an image File as a full-resolution Base64 data URL
+function fileToDataUrl(file) {
     return new Promise((resolve, reject) => {
         if (!file || !file.type.startsWith('image/')) return reject(new Error('Not an image'));
         const reader = new FileReader();
-        reader.onload = (ev) => {
-            const img = new Image();
-            img.onload = () => {
-                const MAX = 128;
-                const scale = Math.min(1, MAX / Math.max(img.width, img.height));
-                const canvas = document.createElement('canvas');
-                canvas.width  = Math.round(img.width  * scale);
-                canvas.height = Math.round(img.height * scale);
-                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-                resolve(canvas.toDataURL('image/jpeg', 0.85));
-            };
-            img.onerror = reject;
-            img.src = ev.target.result;
-        };
+        reader.onload = (ev) => resolve(ev.target.result);
         reader.onerror = reject;
         reader.readAsDataURL(file);
+    });
+}
+
+// Compress and scale a cropped image to a 128x128 square JPEG Base64 data URL
+function scaleImageTo128Square(dataUrl) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width  = 128;
+            canvas.height = 128;
+            canvas.getContext('2d').drawImage(img, 0, 0, 128, 128);
+            resolve(canvas.toDataURL('image/jpeg', 0.85));
+        };
+        img.onerror = reject;
+        img.src = dataUrl;
     });
 }
 
@@ -2938,9 +2941,22 @@ Saves: Fort +X | Ref +X | Will +X`;
             const file = e.dataTransfer?.files?.[0];
             if (file && file.type.startsWith('image/')) {
                 try {
-                    const dataUrl = await fileToPortraitDataUrl(file);
-                    localApply(dataUrl);
-                } catch { toastr['warning']('Could not read image file.', 'RPG Tracker'); }
+                    const dataUrl = await fileToDataUrl(file);
+                    const ctx = SillyTavern.getContext();
+                    const cropped = await ctx.callGenericPopup(
+                        'Set the crop position of the portrait',
+                        ctx.POPUP_TYPE?.CROP ?? 4,
+                        '',
+                        { cropImage: dataUrl, cropAspect: 1 }
+                    );
+                    if (cropped) {
+                        const scaled = await scaleImageTo128Square(cropped);
+                        localApply(scaled);
+                    }
+                } catch (err) {
+                    console.error(err);
+                    toastr['warning']('Could not read or crop image file.', 'RPG Tracker');
+                }
                 return;
             }
             const url = e.dataTransfer?.getData('text/plain')?.trim();
@@ -2962,12 +2978,12 @@ Saves: Fort +X | Ref +X | Will +X`;
             const fileId      = `rt-portrait-file-${Date.now()}`;
             const browseBtnId = `rt-portrait-browse-${Date.now()}`;
             const popupContent = `<div style="padding:10px;min-width:270px;">
-                    <b style="display:block;margin-bottom:8px;">Set Portrait \u2014 ${entityName}</b>
+                    <b style="display:block;margin-bottom:8px;">Set Portrait — ${entityName}</b>
                     ${previewHtml}
-                    <label style="display:block;margin-bottom:4px;font-size:0.85em;opacity:0.8;">Image URL (https://\u2026)</label>
+                    <label style="display:block;margin-bottom:4px;font-size:0.85em;opacity:0.8;">Image URL (https://…)</label>
                     <div style="display:flex;gap:6px;align-items:center;">
-                        <input id="${inputId}" type="text" class="text_pole" placeholder="Paste an image URL\u2026" value="${currentSrc.startsWith('http') ? currentSrc : ''}" style="flex:1;box-sizing:border-box;"/>
-                        <button id="${browseBtnId}" class="menu_button" style="white-space:nowrap;flex-shrink:0;">Browse\u2026</button>
+                        <input id="${inputId}" type="text" class="text_pole" placeholder="Paste an image URL…" value="${currentSrc.startsWith('http') ? currentSrc : ''}" style="flex:1;box-sizing:border-box;"/>
+                        <button id="${browseBtnId}" class="menu_button" style="white-space:nowrap;flex-shrink:0;">Browse…</button>
                     </div>
                     <input id="${fileId}" type="file" accept="image/*" style="display:none"/>
                     <div style="font-size:0.78em;opacity:0.55;margin-top:5px;">Or drag &amp; drop onto the portrait box / paste (Ctrl+V) anywhere on this screen.</div>
@@ -2976,27 +2992,28 @@ Saves: Fort +X | Ref +X | Will +X`;
             if (!ctx.callGenericPopup) { toastr['warning']('Popup API not available.', 'RPG Tracker'); return; }
             const popupOpts = { okButton: 'Apply', cancelButton: 'Cancel', wide: false };
             if (currentSrc) {
-                popupOpts.customButtons = [{ text: '\ud83d\uddd1 Clear Portrait', result: 2, classes: ['menu_button'] }];
+                popupOpts.customButtons = [{ text: '🗑 Clear Portrait', result: 2, classes: ['menu_button'] }];
             }
 
-            // capturedUrl is the source of truth — updated while the popup is open.
-            let capturedUrl = currentSrc.startsWith('http') ? currentSrc : '';
+            // capturedUrl: final ready-to-save value (URL string or already-cropped data URL)
+            // capturedRawUrl: full-res image data URL that still needs cropping (set by browse/paste)
+            let capturedUrl    = currentSrc.startsWith('http') ? currentSrc : '';
+            let capturedRawUrl = '';
 
-            // Define paste handler for this popup session
+            // Define paste handler for this popup session.
+            // We only read the file here — the crop popup opens AFTER this dialog closes.
             const popupPasteHandler = async (ev) => {
                 const file = ev.clipboardData?.files?.[0];
                 if (file && file.type.startsWith('image/')) {
                     ev.preventDefault();
                     ev.stopPropagation();
                     try {
-                        const dataUrl = await fileToPortraitDataUrl(file);
-                        capturedUrl = dataUrl;
+                        capturedRawUrl = await fileToDataUrl(file);
+                        capturedUrl    = ''; // cleared so the raw url is used after closing
                         const urlInput = /** @type {HTMLInputElement|null} */ (document.getElementById(inputId));
-                        if (urlInput) {
-                            urlInput.value = '(pasted image selected ✔)';
-                        }
-                        toastr['success']('Image pasted from clipboard!', 'RPG Tracker');
-                    } catch {
+                        if (urlInput) urlInput.value = '(image pasted — click Apply to crop ✔)';
+                    } catch (err) {
+                        console.error(err);
                         toastr['warning']('Could not read image from clipboard.', 'RPG Tracker');
                     }
                 }
@@ -3009,7 +3026,10 @@ Saves: Fort +X | Ref +X | Will +X`;
 
                 // Track whatever the user types into the URL field
                 if (urlInput) {
-                    urlInput.addEventListener('input', () => { capturedUrl = urlInput.value.trim(); });
+                    urlInput.addEventListener('input', () => {
+                        capturedUrl    = urlInput.value.trim();
+                        capturedRawUrl = ''; // URL typed — no raw image pending
+                    });
                 }
 
                 if (browseBtn && fileInput) {
@@ -3018,15 +3038,18 @@ Saves: Fort +X | Ref +X | Will +X`;
                         ev.stopPropagation();
                         fileInput.click();
                     });
+                    // Read file at full resolution; crop popup will open after this dialog closes.
                     fileInput.addEventListener('change', async () => {
                         const file = fileInput.files?.[0];
                         if (!file) return;
                         try {
-                            const dataUrl = await fileToPortraitDataUrl(file);
-                            capturedUrl = dataUrl;
-                            // Also show in the text field so the user knows it worked
-                            if (urlInput) urlInput.value = '(local file selected \u2714)';
-                        } catch { toastr['warning']('Could not read image file.', 'RPG Tracker'); }
+                            capturedRawUrl = await fileToDataUrl(file);
+                            capturedUrl    = ''; // cleared so the raw url is used after closing
+                            if (urlInput) urlInput.value = '(file selected — click Apply to crop ✔)';
+                        } catch (err) {
+                            console.error(err);
+                            toastr['warning']('Could not read image file.', 'RPG Tracker');
+                        }
                     });
                 }
 
@@ -3035,15 +3058,32 @@ Saves: Fort +X | Ref +X | Will +X`;
             }, 0);
 
             const result = await ctx.callGenericPopup(popupContent, ctx.POPUP_TYPE?.CONFIRM ?? 1, '', popupOpts);
-            
-            // Clean up paste event listener immediately after popup closes
+
+            // Clean up paste event listener immediately after portrait popup closes
             document.removeEventListener('paste', popupPasteHandler);
 
             if (result === 2) {
                 localApply(null);
             } else if (result) {
-                // capturedUrl was set by input/change/paste events while the popup was open
-                if (capturedUrl && (capturedUrl.startsWith('data:image/') || /^https?:\/\//i.test(capturedUrl))) {
+                if (capturedRawUrl) {
+                    // A local file or pasted image is pending — open the crop popup NOW as a
+                    // standalone dialog (portrait popup is already closed at this point).
+                    try {
+                        const cropped = await ctx.callGenericPopup(
+                            'Set the crop position of the portrait',
+                            ctx.POPUP_TYPE?.CROP ?? 4,
+                            '',
+                            { cropImage: capturedRawUrl, cropAspect: 1 }
+                        );
+                        if (cropped) {
+                            const scaled = await scaleImageTo128Square(cropped);
+                            localApply(scaled);
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        toastr['warning']('Could not crop image.', 'RPG Tracker');
+                    }
+                } else if (capturedUrl && (capturedUrl.startsWith('data:image/') || /^https?:\/\//i.test(capturedUrl))) {
                     localApply(capturedUrl);
                 } else if (capturedUrl) {
                     toastr['warning']('Please enter a valid https:// URL or use the Browse button.', 'RPG Tracker');
