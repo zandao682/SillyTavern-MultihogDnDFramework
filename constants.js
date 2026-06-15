@@ -399,6 +399,7 @@ Declare their COMBAT PROFILE immediately:
 - If {{user}} is out of range and attempts to attack, simply move them closer and tell them they could not attack due to being out of (melee) range.
 - The maximum [PARTY] size is 5 + {{user}}. Do not add more members into the party.
 - If {{user}} lacks some item, never accommodate them by magically spawning it out of nowhere conveniently; instead narrate that they don't have it.
+- Do not track spell slots, buffs resources in the status footer; all of that is handled by an external resource tracker.
 </constraints>
 `,
     'sysprompt_legacy.txt': `<role>
@@ -642,6 +643,7 @@ Declare their COMBAT PROFILE immediately:
 - [RNG_QUEUE v6.0_PROPER] is ONLY used in active combat.
 - All narrative (non-combat) skill checks, random event checks, and other rolls MUST be performed via the RollTheDice tool call.
 - If {{user}} is out of range and attempts to attack, simply move them closer and tell them they could not attack due to being out of (melee) range.
+- Do not track spell slots, buffs resources in the status footer; all of that is handled by an external resource tracker.
 </constraints>
 `,
 };
