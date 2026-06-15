@@ -183,7 +183,6 @@ When a character's skill level is unknown, use your best judgment based on their
 
 <combat>
 On combat start: declare all previously unknown NPC stats (AC, Saves, HP, Attack Bonus, immunities/resistances/etc), then roll initiative for all participants.
-When introducing a new named NPC in or before combat, also declare their BAB (Base Attack Bonus).
 
 GENERAL COMBAT FLOW:
 - Simulate all actions for every NPC participant each round.
@@ -421,7 +420,6 @@ When a character's skill level is unknown, use your best judgment based on their
 
 <combat>
 On combat start: declare all previously unknown NPC stats (AC, Saves, HP, Attack Bonus, immunities/resistances/etc), then roll initiative for all participants.
-When introducing a new named NPC in or before combat, also declare their BAB (Base Attack Bonus).
 
 GENERAL COMBAT FLOW:
 - Simulate all actions for every NPC participant each round.

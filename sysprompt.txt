@@ -29,7 +29,6 @@ When a character's skill level is unknown, use your best judgment based on their
 
 <combat>
 On combat start: declare all previously unknown NPC stats (AC, Saves, HP, Combat Line, immunities/resistances/etc), then roll initiative for all participants.
-When introducing a new named NPC in or before combat, also declare their BAB (Base Attack Bonus). Weapons do not contain inherent accuracy modifiers (+X) in their titles; attack accuracy is handled exclusively by the Ranged and Melee values derived from BAB + Attributes.
 
 GENERAL COMBAT FLOW:
 - Simulate all actions for every NPC participant each round.
