@@ -1,8 +1,10 @@
 # Multihog D&D Framework
 
+**"Multihog D&D gives you the Private Pyle experience."** —Gny. Sgt. Hartman
+
 *A D&D-based RPG platform/simulation engine for SillyTavern.*
 
-What this framework does is essentially turn SillyTavern into something like AI Dungeon, but with actual mechanics/consequences. Losing or dying is actually a thing. In Big Rigs, you're always WINNER. Not in Fatbody D&D! That being said, **the system works just as well for casual "slice of life" type scenarios or modern settings, so no need to worry that you're limited to wizards and goblins.**
+What this framework does is essentially turn SillyTavern into something like AI Dungeon, but with actual mechanics/consequences. Losing or dying is actually a thing. In Big Rigs, you're always WINNER. Not in Multihog D&D! That being said, **the system works just as well for casual "slice of life" type scenarios or modern settings, so no need to worry that you're limited to wizards and goblins.**
 
 I wasn't satisfied with any of the commercial offerings available (AI Realm, AI Dungeon, Friends & Fables, etc.), so I made my own D&D platform inside SillyTavern. 
 
@@ -51,6 +53,8 @@ Together they solve the four core problems of LLM tabletop RP: the AI forgetting
 - **Profile saving** - switch between multiple campaigns without losing your state.
 - **Homebrew-friendly** and flexible in general, relying on AI to do a lot of the lifting.
 - **Automatic Long-Context Tracking** via the Lorebook Agent with World Engine simulation.
+- **AI Portrait Generation** via Pollinations.ai — free, non-profit image generation with full lorebook agent context awareness for accurate character portraits.
+- **Inventory Currency Auto-Rendering** — items with a worth value automatically display a styled coin badge (gold, silver, bronze, or dollar) based on the currency type.
 
 <div align="center">
   <figure>

@@ -498,6 +498,103 @@ function wrapEntityHtml(entityName, contentHtml) {
     </div>`;
 }
 
+/**
+ * Helper to parse a currency/worth string to a total value in Copper Pieces (CP).
+ * Supports both D&D standard pieces (GP, SP, CP) and generic dollar/euro/pound.
+ * @param {string} str 
+ * @returns {number}
+ */
+function parseValueToCopper(str) {
+    let totalCp = 0;
+    
+    // Suffix regex (matching gp, sp, cp, gold, silver, bronze, copper, usd, eur, gbp, dollar, euro, pound, etc.)
+    const suffixRx = /([\d,]+(?:\.\d+)?)\s*(gp|sp|cp|gold|silver|bronze|copper|usd|eur|gbp|dollar|euros?|pounds?)\b/gi;
+    // Prefix regex (matching $, £, €)
+    const prefixRx = /([$£€])\s*([\d,]+(?:\.\d+)?)/gi;
+
+    let match;
+    let found = false;
+
+    const cleanNum = (numStr) => parseFloat(numStr.replace(/,/g, ''));
+
+    // Reset regex indices since they are global
+    suffixRx.lastIndex = 0;
+    prefixRx.lastIndex = 0;
+
+    // Check suffix matches
+    while ((match = suffixRx.exec(str)) !== null) {
+        found = true;
+        const num = cleanNum(match[1]);
+        const unit = match[2].toLowerCase();
+        if (/\b(gold|gp|usd|eur|gbp|dollar|euro|pound)\b/.test(unit)) {
+            totalCp += num * 100;
+        } else if (/\b(silver|sp)\b/.test(unit)) {
+            totalCp += num * 10;
+        } else if (/\b(bronze|copper|cp)\b/.test(unit)) {
+            totalCp += num;
+        }
+    }
+
+    // Check prefix matches
+    while ((match = prefixRx.exec(str)) !== null) {
+        found = true;
+        const num = cleanNum(match[2]);
+        totalCp += num * 100;
+    }
+
+    return found ? totalCp : 0;
+}
+
+/**
+ * Helper to detect currency type from a string.
+ * @param {string} str
+ * @returns {string|null}
+ */
+function detectCurrency(str) {
+    if (/\$|\b(usd|dollars?)\b/i.test(str)) return 'usd';
+    if (/€|\b(eur|euros?)\b/i.test(str)) return 'eur';
+    if (/£|\b(gbp|pounds?)\b/i.test(str)) return 'gbp';
+    if (/\b(gp|sp|cp|gold|silver|bronze|copper)\b/i.test(str)) return 'gp';
+    return null;
+}
+
+/**
+ * Helper to format a Copper Pieces value back to a standard GP, SP, CP string or modern currency representation.
+ * @param {number} totalCp 
+ * @param {string} detectedCurrency
+ * @returns {string}
+ */
+function formatValueToCurrency(totalCp, detectedCurrency) {
+    if (totalCp <= 0) return '';
+    const amount = totalCp / 100;
+    const formattedAmount = amount.toLocaleString('en-US', {
+        minimumFractionDigits: totalCp % 100 === 0 ? 0 : 2,
+        maximumFractionDigits: 2
+    });
+    
+    switch (detectedCurrency) {
+        case 'usd':
+            return `$${formattedAmount}`;
+        case 'eur':
+            return `€${formattedAmount}`;
+        case 'gbp':
+            return `£${formattedAmount}`;
+        case 'gp':
+        default: {
+            const gp = Math.floor(totalCp / 100);
+            const sp = Math.floor((totalCp % 100) / 10);
+            const cp = Math.floor(totalCp % 10);
+
+            const parts = [];
+            if (gp > 0) parts.push(`${gp.toLocaleString('en-US')} GP`);
+            if (sp > 0) parts.push(`${sp} SP`);
+            if (cp > 0) parts.push(`${cp} CP`);
+
+            return parts.join(', ');
+        }
+    }
+}
+
     export function blockToItems(tag, content, renderTypeOverride = null) {
         const lines = content.split('\n').map(l => l.trim()).filter(Boolean);
         let renderType = renderTypeOverride || tag;
@@ -770,21 +867,80 @@ function wrapEntityHtml(entityName, contentHtml) {
                 // Lines with a ((MARKER)) prefix bypass the bullet-list renderer
                 const inventoryResults = [];
                 const pendingBullets = [];
+                let totalCp = 0;
+                const currencyCounts = { gp: 0, usd: 0, eur: 0, gbp: 0 };
+
+                const trackCurrency = (val) => {
+                    const cur = detectCurrency(val);
+                    if (cur) currencyCounts[cur]++;
+                };
 
                 const flushBullets = () => {
                     if (!pendingBullets.length) return;
+
+                    // Currency detection map: pattern → { color, icon }
+                    const CURRENCY_STYLES = [
+                        { rx: /\b(gold|gp)\b/i,                               color: '#ffd700', icon: '💰' },
+                        { rx: /\b(dollar|usd|euro|eur|pound|gbp)s?\b|[$£€]/i,  color: '#85bb65', icon: '💵' },
+                        { rx: /\b(silver|sp)\b/i,                              color: '#c0c0c0', icon: '🪙' },
+                        { rx: /\b(bronze|copper|cp)\b/i,                       color: '#cd7f32', icon: '🪙' },
+                    ];
+
+                    // Bare currency item: a line that IS the currency (e.g. "45 GP", "💰 45 GP", "$500")
+                    // — no parenthesised worth annotation, just a number + currency unit
+                    const BARE_CURRENCY_RX = /^[^(]*?(?:([$£€])\s*\d[\d,]*|\d[\d,]*\s*(gp|sp|cp|gold|silver|bronze|copper|dollar|usd|euro|eur|pound|gbp|£|\$|€))\s*$/i;
+
+                    const worthMode = getSettings().inventoryWorthMode || 'hover'; // 'hover' | 'display'
+                    const worthRx = /\s*\(~([^)]+)\)\s*$|\s*\(Worth:\s*([^)]+)\)\s*$/i;
+
                     pendingBullets.forEach(i => {
-                        // Extract hidden worth: (~X GP), (~50 SP), (Worth: 120 GP), etc.
-                        const worthRx = /\s*\(~([^)]+)\)\s*$|\s*\(Worth:\s*([^)]+)\)\s*$/i;
                         const worthMatch = i.match(worthRx);
                         let displayText = i;
                         let titleAttr = '';
+                        let coinBadge = '';
+
                         if (worthMatch) {
+                            // Item has a (~X GP) or (Worth: X GP) annotation
                             const worthVal = (worthMatch[1] || worthMatch[2]).trim();
+                            trackCurrency(worthVal);
+                            totalCp += parseValueToCopper(worthVal);
                             displayText = i.replace(worthRx, '').trim();
                             titleAttr = ` title="Worth: ${escapeHtml(worthVal)}"`;
+
+                            if (worthMode === 'display') {
+                                // Show coin badge inline next to item text
+                                const matched = CURRENCY_STYLES.find(s => s.rx.test(worthVal));
+                                if (matched) {
+                                    coinBadge = ` <span class="rt-coin-badge" style="color:${matched.color}; font-weight:bold; background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:10px; border:1px solid ${matched.color}44; font-size:0.85em; margin-left:4px; white-space:nowrap;">${matched.icon} ${escapeHtml(worthVal)}</span>`;
+                                }
+                            }
+                            // In 'hover' mode: worth is tooltip only — no badge
+                            inventoryResults.push(`<div class="rt-card-item rt-inventory-item"${titleAttr}>${escapeHtmlWithColor(displayText)}${coinBadge}</div>`);
+                        } else if (BARE_CURRENCY_RX.test(i.trim())) {
+                            // This line IS a currency amount (e.g. "45 GP", "💰 45 GP")
+                            // Strip any leading bullet dash — safety guard (pendingBullets already strips it,
+                            // but comma-split path might not)
+                            const cleanText = i.trim().replace(/^\s*[-*]\s*/, '');
+                            trackCurrency(cleanText);
+                            totalCp += parseValueToCopper(cleanText);
+                            const COIN_COLORS = [
+                                { rx: /\b(gold|gp)\b/i,                               color: '#ffd700' },
+                                { rx: /\b(dollar|usd|euro|eur|pound|gbp)s?\b|[$£€]/i,  color: '#85bb65' },
+                                { rx: /\b(silver|sp)\b/i,                              color: '#c0c0c0' },
+                                { rx: /\b(bronze|copper|cp)\b/i,                       color: '#cd7f32' },
+                            ];
+                            const matchedCoin = COIN_COLORS.find(s => s.rx.test(cleanText));
+                            if (matchedCoin) {
+                                const c = matchedCoin.color;
+                                // Same outer wrapper as all other inventory items → keeps bullet • styling
+                                // Same badge style as display-mode worth badges → consistent shininess
+                                inventoryResults.push(`<div class="rt-card-item rt-inventory-item"><span class="rt-coin-badge" style="color:${c}; font-weight:bold; background:rgba(255,255,255,0.05); padding:1px 6px; border-radius:10px; border:1px solid ${c}44; font-size:0.85em; white-space:nowrap;">${escapeHtmlWithColor(cleanText)}</span></div>`);
+                            } else {
+                                inventoryResults.push(`<div class="rt-card-item rt-inventory-item">${escapeHtmlWithColor(cleanText)}</div>`);
+                            }
+                        } else {
+                            inventoryResults.push(`<div class="rt-card-item rt-inventory-item">${escapeHtmlWithColor(displayText)}</div>`);
                         }
-                        inventoryResults.push(`<div class="rt-card-item rt-inventory-item"${titleAttr}>${escapeHtmlWithColor(displayText)}</div>`);
                     });
                     pendingBullets.length = 0;
                 };
@@ -805,6 +961,20 @@ function wrapEntityHtml(entityName, contentHtml) {
                     }
                 }
                 flushBullets();
+
+                if (totalCp > 0) {
+                    // Find currency with highest count, default to 'gp'
+                    let detectedCurrency = 'gp';
+                    let maxCount = 0;
+                    for (const [cur, count] of Object.entries(currencyCounts)) {
+                        if (count > maxCount) {
+                            maxCount = count;
+                            detectedCurrency = cur;
+                        }
+                    }
+                    inventoryResults.totalValueGP = formatValueToCurrency(totalCp, detectedCurrency);
+                    inventoryResults.detectedCurrency = detectedCurrency;
+                }
                 return inventoryResults;
             }
             case 'ABILITIES': {
@@ -830,7 +1000,7 @@ function wrapEntityHtml(entityName, contentHtml) {
             return `<div class="rt-empty" style="text-align: left; align-items: flex-start; padding: 12px; gap: 10px; overflow-y: auto;">
                 <div style="text-align: center; width: 100%; margin-bottom: 4px; flex-shrink: 0;">
                     <div class="rt-empty-icon">📜</div>
-                    <div style="font-size: 17px; font-weight: bold; color: var(--rt-text);">Fatbody D&D Framework</div>
+                    <div style="font-size: 17px; font-weight: bold; color: var(--rt-text);">Multihog D&D Framework</div>
                 </div>
 
                 <div style="display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin: 8px 0 4px 0; flex-shrink: 0;">
@@ -1020,6 +1190,16 @@ function wrapEntityHtml(entityName, contentHtml) {
             const items = blockToItems(tag, content);
             const isCollapsed = collapsed.has(tag);
 
+            let totalValueBadge = '';
+            if (tag === 'INVENTORY' && items.totalValueGP && getSettings().showTotalInventoryValue !== false) {
+                const isModern = ['usd', 'eur', 'gbp'].includes(items.detectedCurrency);
+                const badgeColor = isModern ? '#85bb65' : '#ffd700';
+                const badgeBg = isModern ? 'rgba(133, 187, 101, 0.08)' : 'rgba(255, 215, 0, 0.08)';
+                const badgeBorder = isModern ? 'rgba(133, 187, 101, 0.3)' : 'rgba(255, 215, 0, 0.3)';
+                const badgeIcon = isModern ? '💵' : '💰';
+                totalValueBadge = `<span class="rt-total-value-badge" style="color: ${badgeColor}; font-weight: bold; background: ${badgeBg}; padding: 2px 8px; border-radius: 12px; border: 1px solid ${badgeBorder}; font-size: 0.85em; white-space: nowrap; text-transform: none; letter-spacing: 0;">${badgeIcon} ${items.totalValueGP}</span>`;
+            }
+
             const renderType = customField?.renderType || tag;
             const isFullView = getSettings().fullViewSections.includes(tag) || NO_PAGINATE.has(renderType);
             const localPageSize = getPageSize(tag);
@@ -1068,6 +1248,7 @@ function wrapEntityHtml(entityName, contentHtml) {
                 <div class="rt-section-header" data-tag="${tag}">
                     <span>${icon} ${displayName}</span>
                     <div class="rt-section-header-right">
+                        ${totalValueBadge}
                         ${detachBtn}
                         ${fullViewBtn}
                         <button class="rt-category-settings-btn" data-tag="${tag}" title="Category Rendering Options">

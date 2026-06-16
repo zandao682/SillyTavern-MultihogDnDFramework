@@ -1,6 +1,20 @@
 # Changelog
 
-All notable changes to the **Fatbody D&D Framework** will be documented in this file.
+All notable changes to the **Multihog D&D Framework** will be documented in this file.
+
+## [3.4.9] - 2026-06-16
+
+### Added
+- **AI Character Portrait Generation**: Introduced a built-in portrait generation system powered by the Pollinations API. By clicking on any character, party member, or enemy's portrait box in the tracker, you can select "🤖 AI Generate" to instantly create a high-quality visual representation of them based on their description and game state.
+- **Portrait Prompt Extended Context**: The AI portrait prompt generator now receives massive context to produce highly accurate portraits. It is injected with: 1) the full Lorebook Agent context (all active entries, keywords, and content), 2) the current game state memo, and 3) the last 5 messages of the chat history to capture immediate actions, injuries, and current outfits.
+- **Inventory Currency Auto-Rendering**: Bare currency items in the inventory (e.g. `💰 45 GP` listed as a standalone item — not a worth annotation) now always render with an inline coin badge. Gold/GP → gold coin, Silver/SP → silver coin, Bronze/Copper/CP → bronze coin, Dollar/USD/Euro/Pound → dollar badge. The underlying memo text is never modified.
+- **Inventory Item Worth Toggle**: New "Item Worth" dropdown in General & Visuals settings. Controls how `(~X GP)` worth annotations on inventory items are displayed. **Hover** (default): worth is stripped from the visible item and shown as a native tooltip on hover — the original behavior. **Display**: worth is shown as an inline coin badge next to the item in addition to the tooltip. Both modes always render bare currency items (e.g. `45 GP`) with a coin badge.
+- **Pollinations "Why?" Tooltip**: Added a comprehensive info tooltip to the Pollinations API Key section explaining why Pollinations was chosen: it was created to preserve free AI access, is a non-profit committed to remaining free forever, offers generous hourly rate limits, only requires a GitHub account for a permanent API key, and supports ~10–20 portraits per hour with the default Flux model.
+- **Portrait Resolution Increase**: Increased the internal portrait storage resolution from 128x128 to 512x512. When you click a portrait to view it in full size, it now retains much higher quality and detail instead of appearing pixelated, while still keeping save sizes manageable.
+- **ZImage Default Model**: Changed the default Pollinations AI model from Flux to ZImage, which provides excellent portrait framing and aesthetic consistency.
+
+### Changed
+- **Pollinations Key Popup**: The first-time API key entry popup now includes the full "Why Pollinations?" explanation with details about the non-profit mission, GitHub-only key requirement, and hourly portrait capacity.
 
 ## [3.3.0] - 2026-06-12
 
@@ -759,7 +773,7 @@ Significant upgrades to editing custom fields. The formatting is now clear, and 
 - **Global Deselect**: Clicking any empty space on the tracker now automatically closes any open interactive elements.
 
 ## [2026-04-21] - Rebranding & Physics Integration
-- **Framework Rebranding**: Renamed from RPG Tracker to **Fatbody D&D Framework**.
+- **Framework Rebranding**: Renamed from RPG Tracker to **Multihog D&D Framework**.
 - **RNG Physics Engine**: Integrated the Prompt Injection RNG system for transparent, physics-based rolling.
 - **HUD Controls**: Added "SYSPROMPT" and "RNG" toggle buttons directly to the tracker panel.
 - **Optimized Layout**: Reordered sections to prioritize Character and Combat status over meta-stats like XP and Time.

@@ -8,6 +8,7 @@ import { registerLogQuestTool, checkQuestDeadlines, renderQuestsAsPlainText } fr
 import { initializeDebugViewer, toggleDebugViewer } from './debug-viewer.js';
 import { runRouterPass, rollbackRouterPass, reapplyRouterPass, getLorebookManifest, deleteLorebookEntry, updateLorebookEntry, disableManagedEntries, isRouterRunning, stopRouterPass } from './router.js';
 import { getRequestHeaders } from '../../../../script.js';
+import { fileToDataUrl, scaleImageTo512Square, applyPortraitData, generatePortraitPrompt, showPortraitPromptPopup, generatePortraitDirect, autoGeneratePartyPortraits, removeAllPortraits, checkAndTriggerAutoGenerations, autoGenerateEnemyPortraits, forceCheckAutoGenerations, resetAutoGenerationTracking } from './portraits.js';
 
 export const RENDERING_TAGS_LIBRARY = [
     'Health: ((BAR)) 50/100',
@@ -47,14 +48,14 @@ export const RENDERING_TAGS_LIBRARY = [
 // Capture the folder name dynamically from the module URL so it works regardless of what the user names the folder
 const FOLDER_NAME = (function () {
     try {
-        const scripts = /** @type {HTMLScriptElement[]} */ (Array.from(document.querySelectorAll('script[src]')));
-        const myScript = scripts.find(s => s.src.includes('SillyTavern-FatbodyDnDFramework') || s.src.includes('SillyTavern-RPGStateTracker'));
-        if (myScript) {
-            const match = myScript.src.match(/third-party\/([^\/]+)\//);
-            if (match) return decodeURIComponent(match[1]);
+        const urlObj = new URL(import.meta.url);
+        const parts = urlObj.pathname.split('/');
+        const idx = parts.indexOf('third-party');
+        if (idx !== -1 && idx + 1 < parts.length) {
+            return decodeURIComponent(parts[idx + 1]);
         }
     } catch (e) { }
-    return 'SillyTavern-FatbodyDnDFramework';
+    return 'SillyTavern-MultihogDnDFramework';
 })();
 
 let _stateModelRunning = false;
@@ -375,7 +376,7 @@ async function syncCampaignPrefixAndWorldsForChat(newChatId, source) {
  * Centralized save helper that handles both global settings and
  * the Chat-Linked State for the active chat.
  */
-function saveSettings() {
+export function saveSettings() {
     const s = getSettings();
     const ctx = SillyTavern.getContext();
     ctx.saveSettingsDebounced();
@@ -779,6 +780,7 @@ function refreshQuestLegacyPrompt(s) {
  */
 function loadChatState(chatId) {
     if (!chatId) return false;
+    resetAutoGenerationTracking();
     const s = getSettings();
     const saved = s.chatStates?.[chatId];
     if (!saved) return false;
@@ -831,6 +833,28 @@ function loadChatState(chatId) {
     s.worldProgressionConsolidateEnabled = saved.worldProgressionConsolidateEnabled ?? false;
     s.worldProgressionConsolidateInterval = saved.worldProgressionConsolidateInterval ?? 7;
 
+    s.portraitGeneratorSource = saved.portraitGeneratorSource ?? "pollinations";
+    s.portraitSkipPromptDialog = saved.portraitSkipPromptDialog ?? false;
+    s.portraitAutoGenerateParty = saved.portraitAutoGenerateParty ?? false;
+    s.portraitAutoGenerateEnemies = saved.portraitAutoGenerateEnemies ?? false;
+    s.portraitConnectionSource = saved.portraitConnectionSource ?? "default";
+    s.portraitConnectionProfileId = saved.portraitConnectionProfileId || "";
+    s.portraitCompletionPresetId = saved.portraitCompletionPresetId || "";
+    s.portraitOllamaUrl = saved.portraitOllamaUrl || "http://localhost:11434";
+    s.portraitOllamaModel = saved.portraitOllamaModel || "";
+    s.portraitOpenaiUrl = saved.portraitOpenaiUrl || "";
+    s.portraitOpenaiKey = saved.portraitOpenaiKey || "";
+    s.portraitOpenaiModel = saved.portraitOpenaiModel || "";
+
+    s.worldConnectionSource = saved.worldConnectionSource ?? "default";
+    s.worldConnectionProfileId = saved.worldConnectionProfileId || "";
+    s.worldCompletionPresetId = saved.worldCompletionPresetId || "";
+    s.worldOllamaUrl = saved.worldOllamaUrl || "http://localhost:11434";
+    s.worldOllamaModel = saved.worldOllamaModel || "";
+    s.worldOpenaiUrl = saved.worldOpenaiUrl || "";
+    s.worldOpenaiKey = saved.worldOpenaiKey || "";
+    s.worldOpenaiModel = saved.worldOpenaiModel || "";
+
     // Update settings UI inputs if rendered
     $('#rpg_world_progression_randomize_npcs').prop('checked', !!s.worldProgressionRandomizeNPCs);
     $('#rpg_world_progression_random_skeleton_npc_count').val(s.worldProgressionRandomSkeletonNPCCount ?? 2);
@@ -851,6 +875,43 @@ function loadChatState(chatId) {
     $('#rpg_world_progression_skeleton_use_existing').prop('checked', !!s.worldProgressionSkeletonUseExisting);
     $('#rpg_world_progression_exclusion_list').val(s.worldProgressionExclusionList);
     $('#rpg_world_progression_auto_exclude_party').prop('checked', !!s.worldProgressionAutoExcludeParty);
+
+    // Sync portrait connection settings UI
+    $('#rpg_portrait_generator_source').val(s.portraitGeneratorSource || 'pollinations');
+    $('#rpg_tracker_pollinations_group').toggle((s.portraitGeneratorSource || 'pollinations') === 'pollinations');
+    $('#rpg_tracker_portrait_skip_prompt').prop('checked', !!s.portraitSkipPromptDialog);
+    $('#rpg_tracker_portrait_auto_party').prop('checked', !!s.portraitAutoGenerateParty);
+    $('#rpg_tracker_portrait_auto_enemies').prop('checked', !!s.portraitAutoGenerateEnemies);
+    $('#rpg_tracker_show_total_value').prop('checked', s.showTotalInventoryValue !== false);
+    $('#rpg_tracker_inventory_worth_mode').val(s.inventoryWorthMode || 'hover');
+    $('#rpg_portrait_connection_source').val(s.portraitConnectionSource || 'default');
+    $('#rpg_portrait_connection_profile').val(s.portraitConnectionProfileId || '');
+    $('#rpg_portrait_completion_preset').val(s.portraitCompletionPresetId || '');
+    $('#rpg_portrait_ollama_url').val(s.portraitOllamaUrl || 'http://localhost:11434');
+    $('#rpg_portrait_ollama_model').val(s.portraitOllamaModel || '');
+    $('#rpg_portrait_openai_url').val(s.portraitOpenaiUrl || '');
+    $('#rpg_portrait_openai_key').val(s.portraitOpenaiKey || '');
+    $('#rpg_portrait_openai_model').val(s.portraitOpenaiModel || '');
+    $('#rpg_portrait_openai_model_manual').val(s.portraitOpenaiModel || '');
+
+    // Sync world progression connection settings UI
+    $('#rpg_world_connection_source').val(s.worldConnectionSource || 'default');
+    $('#rpg_world_connection_profile').val(s.worldConnectionProfileId || '');
+    $('#rpg_world_completion_preset').val(s.worldCompletionPresetId || '');
+    $('#rpg_world_ollama_url').val(s.worldOllamaUrl || 'http://localhost:11434');
+    $('#rpg_world_ollama_model').val(s.worldOllamaModel || '');
+    $('#rpg_world_openai_url').val(s.worldOpenaiUrl || '');
+    $('#rpg_world_openai_key').val(s.worldOpenaiKey || '');
+    $('#rpg_world_openai_model').val(s.worldOpenaiModel || '');
+    $('#rpg_world_openai_model_manual').val(s.worldOpenaiModel || '');
+
+    // Toggle container visibilities
+    $('#rpg_portrait_profile_group').toggle(s.portraitConnectionSource === 'profile');
+    $('#rpg_portrait_ollama_group').toggle(s.portraitConnectionSource === 'ollama');
+    $('#rpg_portrait_openai_group').toggle(s.portraitConnectionSource === 'openai');
+    $('#rpg_world_profile_group').toggle(s.worldConnectionSource === 'profile');
+    $('#rpg_world_ollama_group').toggle(s.worldConnectionSource === 'ollama');
+    $('#rpg_world_openai_group').toggle(s.worldConnectionSource === 'openai');
 
     const wpPosSelect = $('#rpg_world_progression_injection_position');
     const wpPosition = s.worldProgressionInjectionPosition ?? 4;
@@ -2368,6 +2429,28 @@ function loadProfile(name) {
     s.worldProgressionExclusionList = p.worldProgressionExclusionList ?? '';
     s.worldProgressionAutoExcludeParty = p.worldProgressionAutoExcludeParty ?? false;
 
+    s.portraitGeneratorSource = p.portraitGeneratorSource ?? "pollinations";
+    s.portraitSkipPromptDialog = p.portraitSkipPromptDialog ?? false;
+    s.portraitAutoGenerateParty = p.portraitAutoGenerateParty ?? false;
+    s.portraitAutoGenerateEnemies = p.portraitAutoGenerateEnemies ?? false;
+    s.portraitConnectionSource = p.portraitConnectionSource ?? "default";
+    s.portraitConnectionProfileId = p.portraitConnectionProfileId || "";
+    s.portraitCompletionPresetId = p.portraitCompletionPresetId || "";
+    s.portraitOllamaUrl = p.portraitOllamaUrl || "http://localhost:11434";
+    s.portraitOllamaModel = p.portraitOllamaModel || "";
+    s.portraitOpenaiUrl = p.portraitOpenaiUrl || "";
+    s.portraitOpenaiKey = p.portraitOpenaiKey || "";
+    s.portraitOpenaiModel = p.portraitOpenaiModel || "";
+
+    s.worldConnectionSource = p.worldConnectionSource ?? "default";
+    s.worldConnectionProfileId = p.worldConnectionProfileId || "";
+    s.worldCompletionPresetId = p.worldCompletionPresetId || "";
+    s.worldOllamaUrl = p.worldOllamaUrl || "http://localhost:11434";
+    s.worldOllamaModel = p.worldOllamaModel || "";
+    s.worldOpenaiUrl = p.worldOpenaiUrl || "";
+    s.worldOpenaiKey = p.worldOpenaiKey || "";
+    s.worldOpenaiModel = p.worldOpenaiModel || "";
+
     // Update settings UI inputs if rendered
     $('#rpg_world_progression_randomize_npcs').prop('checked', !!s.worldProgressionRandomizeNPCs);
     $('#rpg_world_progression_random_skeleton_npc_count').val(s.worldProgressionRandomSkeletonNPCCount ?? 2);
@@ -2385,6 +2468,41 @@ function loadProfile(name) {
     $('#rpg_world_progression_skeleton_conflicts').val(s.worldProgressionSkeletonConflicts ?? 3);
     $('#rpg_world_progression_exclusion_list').val(s.worldProgressionExclusionList);
     $('#rpg_world_progression_auto_exclude_party').prop('checked', !!s.worldProgressionAutoExcludeParty);
+
+    // Sync portrait connection settings UI
+    $('#rpg_portrait_generator_source').val(s.portraitGeneratorSource || 'pollinations');
+    $('#rpg_tracker_pollinations_group').toggle((s.portraitGeneratorSource || 'pollinations') === 'pollinations');
+    $('#rpg_tracker_portrait_skip_prompt').prop('checked', !!s.portraitSkipPromptDialog);
+    $('#rpg_tracker_portrait_auto_party').prop('checked', !!s.portraitAutoGenerateParty);
+    $('#rpg_tracker_portrait_auto_enemies').prop('checked', !!s.portraitAutoGenerateEnemies);
+    $('#rpg_portrait_connection_source').val(s.portraitConnectionSource || 'default');
+    $('#rpg_portrait_connection_profile').val(s.portraitConnectionProfileId || '');
+    $('#rpg_portrait_completion_preset').val(s.portraitCompletionPresetId || '');
+    $('#rpg_portrait_ollama_url').val(s.portraitOllamaUrl || 'http://localhost:11434');
+    $('#rpg_portrait_ollama_model').val(s.portraitOllamaModel || '');
+    $('#rpg_portrait_openai_url').val(s.portraitOpenaiUrl || '');
+    $('#rpg_portrait_openai_key').val(s.portraitOpenaiKey || '');
+    $('#rpg_portrait_openai_model').val(s.portraitOpenaiModel || '');
+    $('#rpg_portrait_openai_model_manual').val(s.portraitOpenaiModel || '');
+
+    // Sync world progression connection settings UI
+    $('#rpg_world_connection_source').val(s.worldConnectionSource || 'default');
+    $('#rpg_world_connection_profile').val(s.worldConnectionProfileId || '');
+    $('#rpg_world_completion_preset').val(s.worldCompletionPresetId || '');
+    $('#rpg_world_ollama_url').val(s.worldOllamaUrl || 'http://localhost:11434');
+    $('#rpg_world_ollama_model').val(s.worldOllamaModel || '');
+    $('#rpg_world_openai_url').val(s.worldOpenaiUrl || '');
+    $('#rpg_world_openai_key').val(s.worldOpenaiKey || '');
+    $('#rpg_world_openai_model').val(s.worldOpenaiModel || '');
+    $('#rpg_world_openai_model_manual').val(s.worldOpenaiModel || '');
+
+    // Toggle container visibilities
+    $('#rpg_portrait_profile_group').toggle(s.portraitConnectionSource === 'profile');
+    $('#rpg_portrait_ollama_group').toggle(s.portraitConnectionSource === 'ollama');
+    $('#rpg_portrait_openai_group').toggle(s.portraitConnectionSource === 'openai');
+    $('#rpg_world_profile_group').toggle(s.worldConnectionSource === 'profile');
+    $('#rpg_world_ollama_group').toggle(s.worldConnectionSource === 'ollama');
+    $('#rpg_world_openai_group').toggle(s.worldConnectionSource === 'openai');
 
     // Toggle container visibilities
     if (s.worldProgressionRandomizeNPCs) $('#rpg_world_progression_random_npc_count_container').show();
@@ -2413,44 +2531,6 @@ function refreshProfileDropdown() {
     const names = Object.keys(s.profiles || {});
     sel.innerHTML = '<option value="">-- No Profile --</option>' +
         names.map(n => `<option value="${escapeHtml(n)}"${n === s.activeProfile ? ' selected' : ''}>${escapeHtml(n)}</option>`).join('');
-}
-
-// Read an image File as a full-resolution Base64 data URL
-function fileToDataUrl(file) {
-    return new Promise((resolve, reject) => {
-        if (!file || !file.type.startsWith('image/')) return reject(new Error('Not an image'));
-        const reader = new FileReader();
-        reader.onload = (ev) => resolve(ev.target.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-    });
-}
-
-// Compress and scale a cropped image to a 128x128 square JPEG Base64 data URL
-function scaleImageTo128Square(dataUrl) {
-    return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width  = 128;
-            canvas.height = 128;
-            canvas.getContext('2d').drawImage(img, 0, 0, 128, 128);
-            resolve(canvas.toDataURL('image/jpeg', 0.85));
-        };
-        img.onerror = reject;
-        img.src = dataUrl;
-    });
-}
-
-function applyPortraitData(entityName, src) {
-    const s = getSettings();
-    if (!s.customPortraits) s.customPortraits = {};
-    if (src) {
-        s.customPortraits[entityName] = src;
-    } else {
-        delete s.customPortraits[entityName];
-    }
-    saveSettings();
 }
 
 async function showRngExplanation() {
@@ -2953,7 +3033,7 @@ Saves: Fort +X | Ref +X | Will +X`;
                         { cropImage: dataUrl, cropAspect: 1 }
                     );
                     if (cropped) {
-                        const scaled = await scaleImageTo128Square(cropped);
+                        const scaled = await scaleImageTo512Square(cropped);
                         localApply(scaled);
                     }
                 } catch (err) {
@@ -2993,9 +3073,13 @@ Saves: Fort +X | Ref +X | Will +X`;
                 </div>`;
             const ctx = SillyTavern.getContext();
             if (!ctx.callGenericPopup) { toastr['warning']('Popup API not available.', 'RPG Tracker'); return; }
-            const popupOpts = { okButton: 'Apply', cancelButton: 'Cancel', wide: false };
+            const popupOpts = { okButton: 'Apply', cancelButton: 'Cancel', wide: false,
+                customButtons: [
+                    { text: '🤖 AI Generate', result: 4, classes: ['menu_button'] },
+                ],
+            };
             if (currentSrc) {
-                popupOpts.customButtons = [{ text: '🗑 Clear Portrait', result: 2, classes: ['menu_button'] }];
+                popupOpts.customButtons.push({ text: '🗑 Clear Portrait', result: 2, classes: ['menu_button'] });
             }
 
             // capturedUrl: final ready-to-save value (URL string or already-cropped data URL)
@@ -3067,6 +3151,34 @@ Saves: Fort +X | Ref +X | Will +X`;
 
             if (result === 2) {
                 localApply(null);
+            } else if (result === 4) {
+                // AI Generate — launch the prompt generation flow
+                try {
+                    if (s.portraitSkipPromptDialog) {
+                        toastr['info'](`Generating portrait for ${entityName} in background…`, 'RPG Tracker');
+                        const aiPrompt = await generatePortraitPrompt(entityName);
+                        if (!aiPrompt) {
+                            toastr['warning']('Could not generate prompt — no context found.', 'RPG Tracker');
+                            return;
+                        }
+                        toastr['info'](`Generating image for ${entityName}…`, 'RPG Tracker');
+                        const dataUrl = await generatePortraitDirect(aiPrompt, entityName);
+                        const scaled = await scaleImageTo512Square(dataUrl);
+                        localApply(scaled);
+                        toastr['success'](`Portrait auto-generated and applied for ${entityName}!`, 'RPG Tracker');
+                    } else {
+                        toastr['info']('Generating portrait prompt…', 'RPG Tracker');
+                        const aiPrompt = await generatePortraitPrompt(entityName);
+                        if (aiPrompt) {
+                            await showPortraitPromptPopup(aiPrompt, entityName, localApply, refresh);
+                        } else {
+                            toastr['warning']('Could not generate prompt — no context found.', 'RPG Tracker');
+                        }
+                    }
+                } catch (err) {
+                    console.error('[RPG Tracker] AI portrait error:', err);
+                    toastr['error']('AI portrait generation failed: ' + (err.message || err), 'RPG Tracker');
+                }
             } else if (result) {
                 if (capturedRawUrl) {
                     // A local file or pasted image is pending — open the crop popup NOW as a
@@ -3079,7 +3191,7 @@ Saves: Fort +X | Ref +X | Will +X`;
                             { cropImage: capturedRawUrl, cropAspect: 1 }
                         );
                         if (cropped) {
-                            const scaled = await scaleImageTo128Square(cropped);
+                            const scaled = await scaleImageTo512Square(cropped);
                             localApply(scaled);
                         }
                     } catch (err) {
@@ -3167,6 +3279,10 @@ function refreshRenderedView() {
             createDetachedPanel(tag);
         }
     });
+
+    if (_historyViewIndex === -1) {
+        checkAndTriggerAutoGenerations(refreshRenderedView);
+    }
 }
 
 function createDetachedPanel(tag) {
@@ -3341,7 +3457,7 @@ function createPanel() {
             <div class="rt-resizer-tr" id="rt-resizer-tr" title="Resize from top-right"></div>
             <div class="rpg-tracker-header" id="rpg-tracker-header">
                 <div class="rpg-tracker-header-left">
-                    <span>Fatbody D&D Framework</span>
+                    <span>Multihog D&D Framework</span>
                     <div class="rpg-tracker-status-indicator active" id="rpg-tracker-status"></div>
                     <button class="rpg-tracker-stop-btn" id="rpg-tracker-stop-btn" title="Stop Generation" style="display:none;">■</button>
                     <button class="rpg-tracker-icon-btn" id="rpg-tracker-chat-link-btn" style="font-size:13px;" title="Chat Link ON">🔗</button>
@@ -3353,7 +3469,7 @@ function createPanel() {
                     <button class="rpg-tracker-icon-btn" id="rpg-tracker-pause-btn" title="Pause Tracker">⏸</button>
                     <button class="rpg-tracker-icon-btn" id="rpg-tracker-prompt-btn" title="Toggle direct prompt">💬</button>
                     <button class="rpg-tracker-icon-btn" id="rpg-tracker-view-btn" title="Toggle rendered view">⊞</button>
-                    <button class="rpg-tracker-icon-btn" id="rpg-tracker-delta-btn" title="Toggle change log">δ</button>
+                    <button class="rpg-tracker-icon-btn" id="rpg-tracker-portraits-menu-btn" title="AI Portrait Actions">🖼️</button>
                     <button class="rpg-tracker-icon-btn" id="rpg-tracker-agent-btn" title="Lorebook Agent">🤖</button>
                     <button class="rpg-tracker-icon-btn" id="rpg-tracker-debug-btn" title="Context Debugger" style="display:none;">🛠️</button>
                     <button class="rpg-tracker-icon-btn" id="rpg-tracker-collapse-btn" title="Collapse Panel"><i class="fa-solid ${settings.trackerCollapsed ? 'fa-chevron-down' : 'fa-chevron-up'}"></i></button>
@@ -3608,6 +3724,7 @@ function createPanel() {
                 <div id="rt-footer-location" style="font-size: 0.769em; color: var(--rt-accent); flex: 1; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.9; cursor: help;" title="Current Location (Main, Sub)"></div>
                 <div class="flex-container gap-1 alignitemscenter rt-utility-footer-group">
                     <span id="rpg-tracker-count">~${Math.round(settings.currentMemo.length / 2.62)} tokens</span>
+                    <button class="rpg-tracker-nav-btn" id="rpg-tracker-delta-btn" title="Toggle change log" style="padding: 1px 5px; font-size: 0.692em; opacity: 0.8; margin-left: 5px;">δ</button>
                     <button class="rpg-tracker-nav-btn" id="rpg-tracker-memo-clear" style="padding: 1px 5px; font-size: 0.692em; opacity: 0.8; margin-left: 5px;" title="Clear memo and history">CLEAR</button>
                 </div>
             </div>
@@ -5439,6 +5556,38 @@ function createPanel() {
         applyViewState();
     });
 
+    // Portraits menu action
+    panel.querySelector('#rpg-tracker-portraits-menu-btn').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const ctx = SillyTavern.getContext();
+        if (!ctx.callGenericPopup) return;
+
+        const popupContent = `<div style="padding:10px;min-width:260px;">
+            <b style="display:block;margin-bottom:8px;">🖼️ AI Portrait Actions</b>
+            <div style="font-size:0.85em;opacity:0.8;margin-bottom:12px;">Choose an action to manage or generate portraits for active entities.</div>
+        </div>`;
+
+        const popupOpts = {
+            okButton: false,
+            cancelButton: 'Cancel',
+            wide: false,
+            customButtons: [
+                { text: '✨ Auto-Generate Party Portraits', result: 1001, classes: ['menu_button'] },
+                { text: '😈 Auto-Generate Enemy Portraits', result: 1003, classes: ['menu_button'] },
+                { text: '🗑 Remove All Portraits', result: 1002, classes: ['menu_button', 'danger'] },
+            ],
+        };
+
+        const choice = await ctx.callGenericPopup(popupContent, ctx.POPUP_TYPE?.TEXT ?? 1, '', popupOpts);
+        if (choice === 1001) {
+            await autoGeneratePartyPortraits(refreshRenderedView);
+        } else if (choice === 1002) {
+            removeAllPortraits(refreshRenderedView);
+        } else if (choice === 1003) {
+            await autoGenerateEnemyPortraits(refreshRenderedView);
+        }
+    });
+
     // Delta toggle — also shows/hides the resize handle
     panel.querySelector('#rpg-tracker-delta-btn').addEventListener('click', () => {
         const deltaEl = /** @type {HTMLElement} */ (panel.querySelector('#rpg-tracker-delta'));
@@ -6424,7 +6573,7 @@ function openPromptEditor(tag, title, currentText, defaultText, onSave) {
  */
 function exportModules(fields) {
     const payload = {
-        format: 'fatbody-custom-module',
+        format: 'multihog-custom-module',
         version: 1,
         exportedAt: new Date().toISOString(),
         modules: fields.map(f => ({
@@ -6479,7 +6628,7 @@ function openShareModal(jsonString) {
                     // Use modern Clipboard API if available and in secure context
                     if (navigator.clipboard && window.isSecureContext) {
                         await navigator.clipboard.writeText(jsonString);
-                        toastr['success']('Module code copied to clipboard!', 'Fatbody Framework');
+                        toastr['success']('Module code copied to clipboard!', 'Multihog Framework');
                         return;
                     }
 
@@ -6499,13 +6648,13 @@ function openShareModal(jsonString) {
                     document.body.removeChild(ta);
 
                     if (success) {
-                        toastr['success']('Module code copied to clipboard!', 'Fatbody Framework');
+                        toastr['success']('Module code copied to clipboard!', 'Multihog Framework');
                     } else {
                         throw new Error('execCommand returned false');
                     }
                 } catch (err) {
-                    console.error('[Fatbody Framework] clipboard copy failed:', err);
-                    toastr['error']('Could not copy automatically. Please select the text manually.', 'Fatbody Framework');
+                    console.error('[Multihog Framework] clipboard copy failed:', err);
+                    toastr['error']('Could not copy automatically. Please select the text manually.', 'Multihog Framework');
                 }
             });
         }
@@ -6517,7 +6666,7 @@ function openShareModal(jsonString) {
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `fatbody_module_${new Date().getTime()}.json`;
+                a.download = `multihog_module_${new Date().getTime()}.json`;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
@@ -6540,12 +6689,12 @@ async function importModulesFromJson(jsonString) {
     try {
         parsed = JSON.parse(jsonString.trim());
     } catch {
-        toastr['error']('Invalid JSON. Please paste a valid module export.', 'Fatbody Framework');
+        toastr['error']('Invalid JSON. Please paste a valid module export.', 'Multihog Framework');
         return;
     }
 
-    if (parsed?.format !== 'fatbody-custom-module' || !Array.isArray(parsed?.modules)) {
-        toastr['error']("This doesn't look like a Fatbody module export.", 'Fatbody Framework');
+    if (parsed?.format !== 'multihog-custom-module' && parsed?.format !== 'fatbody-custom-module' || !Array.isArray(parsed?.modules)) {
+        toastr['error']("This doesn't look like a Multihog module export.", 'Multihog Framework');
         return;
     }
 
@@ -6557,7 +6706,7 @@ async function importModulesFromJson(jsonString) {
     });
 
     if (incoming.length === 0) {
-        toastr['warning']('No valid modules found in the export.', 'Fatbody Framework');
+        toastr['warning']('No valid modules found in the export.', 'Multihog Framework');
         return;
     }
 
@@ -6569,7 +6718,7 @@ async function importModulesFromJson(jsonString) {
     if (stockConflicts.length > 0) {
         toastr['error'](
             `Cannot import: [${stockConflicts.map(m => m.tag).join('], [')}] clash with built-in stock modules.`,
-            'Fatbody Framework'
+            'Multihog Framework'
         );
         return;
     }
@@ -6617,14 +6766,14 @@ async function importModulesFromJson(jsonString) {
     }
 
     if (importedCount === 0) {
-        toastr['info']('No modules were imported (all conflicts were skipped).', 'Fatbody Framework');
+        toastr['info']('No modules were imported (all conflicts were skipped).', 'Multihog Framework');
         return;
     }
 
     saveSettings();
     refreshOrderList();
     syncMemoView();
-    toastr['success'](`Imported ${importedCount} custom module(s).`, 'Fatbody Framework');
+    toastr['success'](`Imported ${importedCount} custom module(s).`, 'Multihog Framework');
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -6838,7 +6987,7 @@ async function autoApplySysprompt() {
             throw new Error(`Server returned ${response.status}`);
         }
     } catch (err) {
-        console.warn(`[Fatbody Framework] autoApplySysprompt: could not fetch ${fileName}, using fallback:`, err);
+        console.warn(`[Multihog Framework] autoApplySysprompt: could not fetch ${fileName}, using fallback:`, err);
         content = RT_PROMPTS[fileName];
     }
     if (!content) return;
@@ -6948,6 +7097,7 @@ function buildSysprompt(rawText) {
 
     const ctx = SillyTavern.getContext();
     const { eventSource, event_types, renderExtensionTemplateAsync } = ctx;
+    const pm = ctx.getPresetManager ? ctx.getPresetManager() : null;
 
     getSettings();
     migrateCustomFields();
@@ -7065,6 +7215,51 @@ function buildSysprompt(rawText) {
 
         $('#rpg_tracker_enable_portraits').prop('checked', settings.enablePortraits !== false).on('change', function () {
             settings.enablePortraits = !!$(this).prop('checked');
+            saveSettings();
+            refreshRenderedView();
+        });
+
+        $('#rpg_portrait_generator_source').val(settings.portraitGeneratorSource || 'pollinations').on('change', function () {
+            settings.portraitGeneratorSource = String($(this).val());
+            saveSettings();
+            $('#rpg_tracker_pollinations_group').toggle(settings.portraitGeneratorSource === 'pollinations');
+        });
+        $('#rpg_tracker_pollinations_group').toggle((settings.portraitGeneratorSource || 'pollinations') === 'pollinations');
+
+        $('#rpg_tracker_portrait_skip_prompt').prop('checked', !!settings.portraitSkipPromptDialog).on('change', function () {
+            settings.portraitSkipPromptDialog = !!$(this).prop('checked');
+            saveSettings();
+        });
+
+        $('#rpg_tracker_portrait_auto_party').prop('checked', !!settings.portraitAutoGenerateParty).on('change', function () {
+            settings.portraitAutoGenerateParty = !!$(this).prop('checked');
+            saveSettings();
+            if (settings.portraitAutoGenerateParty) {
+                forceCheckAutoGenerations(refreshRenderedView);
+            }
+        });
+
+        $('#rpg_tracker_portrait_auto_enemies').prop('checked', !!settings.portraitAutoGenerateEnemies).on('change', function () {
+            settings.portraitAutoGenerateEnemies = !!$(this).prop('checked');
+            saveSettings();
+            if (settings.portraitAutoGenerateEnemies) {
+                forceCheckAutoGenerations(refreshRenderedView);
+            }
+        });
+
+        $('#rpg_tracker_pollinations_key').val(settings.pollinationsApiKey || '').on('change', function () {
+            settings.pollinationsApiKey = String($(this).val()).trim();
+            saveSettings();
+        });
+
+        $('#rpg_tracker_inventory_worth_mode').val(settings.inventoryWorthMode || 'hover').on('change', function () {
+            settings.inventoryWorthMode = String($(this).val());
+            saveSettings();
+            refreshRenderedView();
+        });
+
+        $('#rpg_tracker_show_total_value').prop('checked', settings.showTotalInventoryValue !== false).on('change', function () {
+            settings.showTotalInventoryValue = !!$(this).prop('checked');
             saveSettings();
             refreshRenderedView();
         });
@@ -7319,6 +7514,252 @@ function buildSysprompt(rawText) {
         });
 
 
+
+        // ── Portrait Connection Settings UI Bindings ──
+        const portraitSourceSelect = $('#rpg_portrait_connection_source');
+        const portraitProfileGroup = $('#rpg_portrait_profile_group');
+        const portraitProfileSelect = $('#rpg_portrait_connection_profile');
+        const portraitOllamaGroup = $('#rpg_portrait_ollama_group');
+        const portraitOpenaiGroup = $('#rpg_portrait_openai_group');
+
+        function updatePortraitConnectionPanels() {
+            const source = portraitSourceSelect.val();
+            portraitProfileGroup.toggle(source === 'profile');
+            portraitOllamaGroup.toggle(source === 'ollama');
+            portraitOpenaiGroup.toggle(source === 'openai');
+        }
+
+        portraitSourceSelect.val(settings.portraitConnectionSource || 'default').on('change', function () {
+            settings.portraitConnectionSource = $(this).val();
+            updatePortraitConnectionPanels();
+            saveSettings();
+        });
+        updatePortraitConnectionPanels();
+
+        // Ollama URL / Model
+        $('#rpg_portrait_ollama_url').val(settings.portraitOllamaUrl || 'http://localhost:11434').on('input', function () {
+            settings.portraitOllamaUrl = $(this).val();
+            saveSettings();
+        });
+        const portraitOllamaModelSelect = $('#rpg_portrait_ollama_model');
+        portraitOllamaModelSelect.val(settings.portraitOllamaModel).on('change', function () {
+            settings.portraitOllamaModel = $(this).val();
+            saveSettings();
+        });
+        $('#rpg_portrait_ollama_refresh').on('click', async function () {
+            const url = $('#rpg_portrait_ollama_url').val();
+            if (!url) return toastr['info']("Please enter an Ollama URL first.");
+            try {
+                toastr['info']("Fetching Ollama models...");
+                const models = await fetchOllamaModels(url);
+                portraitOllamaModelSelect.empty().append('<option value="">-- Select Model --</option>');
+                models.forEach(m => {
+                    portraitOllamaModelSelect.append($('<option></option>').val(m.name).text(m.name));
+                });
+                portraitOllamaModelSelect.val(settings.portraitOllamaModel);
+                toastr['success']("Ollama models updated.");
+            } catch (e) {
+                toastr['error']("Failed to fetch Ollama models.");
+            }
+        });
+
+        // OpenAI URL / Key / Model
+        $('#rpg_portrait_openai_url').val(settings.portraitOpenaiUrl).on('input', function () {
+            settings.portraitOpenaiUrl = $(this).val();
+            saveSettings();
+        });
+        $('#rpg_portrait_openai_key').val(settings.portraitOpenaiKey).on('input', function () {
+            settings.portraitOpenaiKey = $(this).val();
+            saveSettings();
+        });
+        const portraitOpenaiModelSelect = $('#rpg_portrait_openai_model');
+        const portraitOpenaiModelManual = $('#rpg_portrait_openai_model_manual');
+        portraitOpenaiModelManual.val(settings.portraitOpenaiModel || '');
+        portraitOpenaiModelSelect.on('change', function () {
+            const val = $(this).val();
+            if (val) {
+                portraitOpenaiModelManual.val('');
+                settings.portraitOpenaiModel = String(val);
+            } else {
+                settings.portraitOpenaiModel = String(portraitOpenaiModelManual.val() || '').trim() || '';
+            }
+            saveSettings();
+        });
+        portraitOpenaiModelManual.on('input', function () {
+            const manual = String($(this).val() || '').trim();
+            if (manual) portraitOpenaiModelSelect.val('');
+            settings.portraitOpenaiModel = manual || String(portraitOpenaiModelSelect.val() || '') || '';
+            saveSettings();
+        });
+        $('#rpg_portrait_openai_refresh').on('click', async function () {
+            const url = $('#rpg_portrait_openai_url').val();
+            const key = $('#rpg_portrait_openai_key').val();
+            if (!url) return toastr['info']("Please enter an Endpoint URL first.");
+            try {
+                toastr['info']("Fetching models...");
+                const models = await fetchOpenAIModels(url, key);
+                portraitOpenaiModelSelect.empty().append('<option value="">-- Select Model --</option>');
+                models.forEach(m => {
+                    const id = typeof m === 'string' ? m : (m.id || m.name);
+                    if (id) portraitOpenaiModelSelect.append($('<option></option>').val(id).text(id));
+                });
+                portraitOpenaiModelSelect.val(settings.portraitOpenaiModel);
+                toastr['success']("Models updated.");
+            } catch (e) {
+                toastr['warning']("Cannot auto-detect models. Type manually.");
+            }
+        });
+
+        // Profiles / Presets
+        const portraitPresetSelect = $('#rpg_portrait_completion_preset');
+        if (ctx.ConnectionManagerRequestService?.handleDropdown) {
+            /** @type {any} */ (ctx.ConnectionManagerRequestService).handleDropdown(portraitProfileSelect[0]);
+            portraitProfileSelect.val(settings.portraitConnectionProfileId || "");
+        } else {
+            getConnectionProfiles().then(profiles => {
+                portraitProfileSelect.empty().append('<option value="">-- No Profile Selected --</option>');
+                profiles.forEach(p => portraitProfileSelect.append($('<option></option>').val(p).text(p)));
+                portraitProfileSelect.val(settings.portraitConnectionProfileId || "");
+            });
+        }
+        portraitProfileSelect.on('change', function () {
+            settings.portraitConnectionProfileId = $(this).val();
+            saveSettings();
+        });
+
+        if (pm && typeof pm.getAllPresets === 'function') {
+            const presets = pm.getAllPresets();
+            portraitPresetSelect.empty().append('<option value="">-- Use Current Settings --</option>');
+            presets.forEach(p => portraitPresetSelect.append($('<option></option>').val(p).text(p)));
+            portraitPresetSelect.val(settings.portraitCompletionPresetId || '');
+        }
+        portraitPresetSelect.on('change', function () {
+            settings.portraitCompletionPresetId = String($(this).val() || '');
+            saveSettings();
+        });
+
+        // ── World Progression Connection Settings UI Bindings ──
+        const worldSourceSelect = $('#rpg_world_connection_source');
+        const worldProfileGroup = $('#rpg_world_profile_group');
+        const worldProfileSelect = $('#rpg_world_connection_profile');
+        const worldOllamaGroup = $('#rpg_world_ollama_group');
+        const worldOpenaiGroup = $('#rpg_world_openai_group');
+
+        function updateWorldConnectionPanels() {
+            const source = worldSourceSelect.val();
+            worldProfileGroup.toggle(source === 'profile');
+            worldOllamaGroup.toggle(source === 'ollama');
+            worldOpenaiGroup.toggle(source === 'openai');
+        }
+
+        worldSourceSelect.val(settings.worldConnectionSource || 'default').on('change', function () {
+            settings.worldConnectionSource = $(this).val();
+            updateWorldConnectionPanels();
+            saveSettings();
+        });
+        updateWorldConnectionPanels();
+
+        // Ollama URL / Model
+        $('#rpg_world_ollama_url').val(settings.worldOllamaUrl || 'http://localhost:11434').on('input', function () {
+            settings.worldOllamaUrl = $(this).val();
+            saveSettings();
+        });
+        const worldOllamaModelSelect = $('#rpg_world_ollama_model');
+        worldOllamaModelSelect.val(settings.worldOllamaModel).on('change', function () {
+            settings.worldOllamaModel = $(this).val();
+            saveSettings();
+        });
+        $('#rpg_world_ollama_refresh').on('click', async function () {
+            const url = $('#rpg_world_ollama_url').val();
+            if (!url) return toastr['info']("Please enter an Ollama URL first.");
+            try {
+                toastr['info']("Fetching Ollama models...");
+                const models = await fetchOllamaModels(url);
+                worldOllamaModelSelect.empty().append('<option value="">-- Select Model --</option>');
+                models.forEach(m => {
+                    worldOllamaModelSelect.append($('<option></option>').val(m.name).text(m.name));
+                });
+                worldOllamaModelSelect.val(settings.worldOllamaModel);
+                toastr['success']("Ollama models updated.");
+            } catch (e) {
+                toastr['error']("Failed to fetch Ollama models.");
+            }
+        });
+
+        // OpenAI URL / Key / Model
+        $('#rpg_world_openai_url').val(settings.worldOpenaiUrl).on('input', function () {
+            settings.worldOpenaiUrl = $(this).val();
+            saveSettings();
+        });
+        $('#rpg_world_openai_key').val(settings.worldOpenaiKey).on('input', function () {
+            settings.worldOpenaiKey = $(this).val();
+            saveSettings();
+        });
+        const worldOpenaiModelSelect = $('#rpg_world_openai_model');
+        const worldOpenaiModelManual = $('#rpg_world_openai_model_manual');
+        worldOpenaiModelManual.val(settings.worldOpenaiModel || '');
+        worldOpenaiModelSelect.on('change', function () {
+            const val = $(this).val();
+            if (val) {
+                worldOpenaiModelManual.val('');
+                settings.worldOpenaiModel = String(val);
+            } else {
+                settings.worldOpenaiModel = String(worldOpenaiModelManual.val() || '').trim() || '';
+            }
+            saveSettings();
+        });
+        worldOpenaiModelManual.on('input', function () {
+            const manual = String($(this).val() || '').trim();
+            if (manual) worldOpenaiModelSelect.val('');
+            settings.worldOpenaiModel = manual || String(worldOpenaiModelSelect.val() || '') || '';
+            saveSettings();
+        });
+        $('#rpg_world_openai_refresh').on('click', async function () {
+            const url = $('#rpg_world_openai_url').val();
+            const key = $('#rpg_world_openai_key').val();
+            if (!url) return toastr['info']("Please enter an Endpoint URL first.");
+            try {
+                toastr['info']("Fetching models...");
+                const models = await fetchOpenAIModels(url, key);
+                worldOpenaiModelSelect.empty().append('<option value="">-- Select Model --</option>');
+                models.forEach(m => {
+                    const id = typeof m === 'string' ? m : (m.id || m.name);
+                    if (id) worldOpenaiModelSelect.append($('<option></option>').val(id).text(id));
+                });
+                worldOpenaiModelSelect.val(settings.worldOpenaiModel);
+                toastr['success']("Models updated.");
+            } catch (e) {
+                toastr['warning']("Cannot auto-detect models. Type manually.");
+            }
+        });
+
+        // Profiles / Presets
+        const worldPresetSelect = $('#rpg_world_completion_preset');
+        if (ctx.ConnectionManagerRequestService?.handleDropdown) {
+            /** @type {any} */ (ctx.ConnectionManagerRequestService).handleDropdown(worldProfileSelect[0]);
+            worldProfileSelect.val(settings.worldConnectionProfileId || "");
+        } else {
+            getConnectionProfiles().then(profiles => {
+                worldProfileSelect.empty().append('<option value="">-- No Profile Selected --</option>');
+                profiles.forEach(p => worldProfileSelect.append($('<option></option>').val(p).text(p)));
+                worldProfileSelect.val(settings.worldConnectionProfileId || "");
+            });
+        }
+        worldProfileSelect.on('change', function () {
+            settings.worldConnectionProfileId = $(this).val();
+            saveSettings();
+        });
+
+        if (pm && typeof pm.getAllPresets === 'function') {
+            const presets = pm.getAllPresets();
+            worldPresetSelect.empty().append('<option value="">-- Use Current Settings --</option>');
+            presets.forEach(p => worldPresetSelect.append($('<option></option>').val(p).text(p)));
+            worldPresetSelect.val(settings.worldCompletionPresetId || '');
+        }
+        worldPresetSelect.on('change', function () {
+            settings.worldCompletionPresetId = String($(this).val() || '');
+            saveSettings();
+        });
 
         // Advanced Options
         const lookbackInput = $('#rpg_tracker_lookback_messages');
@@ -7592,7 +8033,6 @@ function buildSysprompt(rawText) {
 
         // Populate presets
         const presetSelect = $('#rpg_tracker_completion_preset');
-        const pm = ctx.getPresetManager ? ctx.getPresetManager() : null;
         if (pm && typeof pm.getAllPresets === 'function') {
             const presets = pm.getAllPresets();
             presetSelect.empty().append('<option value="">-- Use Current Settings --</option>');
@@ -7823,7 +8263,7 @@ RULES:
         $('#rpg_tracker_export_all_modules').on('click', () => {
             const s = getSettings();
             if (!s.customFields || s.customFields.length === 0) {
-                toastr['info']('No custom modules to export.', 'Fatbody Framework');
+                toastr['info']('No custom modules to export.', 'Multihog Framework');
                 return;
             }
             exportModules(s.customFields);
@@ -7848,7 +8288,7 @@ RULES:
                         </p>
                         <textarea id="rt_import_blob" rows="12" class="text_pole"
                             style="font-family:monospace; font-size:11px; resize:vertical; width:100%;"
-                            placeholder='{"format": "fatbody-custom-module", ...}'
+                            placeholder='{"format": "multihog-custom-module", ...}'
                         ></textarea>
                         <button id="rt_import_file_btn" class="menu_button interactable" style="width:100%;">
                             <i class="fa-solid fa-file-upload"></i> Load from File
@@ -7994,7 +8434,7 @@ RULES:
                     throw new Error(`Server returned ${response.status}`);
                 }
             } catch (err) {
-                console.warn(`[Fatbody Framework] Could not fetch ${fileName}, using hardcoded fallback:`, err);
+                console.warn(`[Multihog Framework] Could not fetch ${fileName}, using hardcoded fallback:`, err);
                 content = RT_PROMPTS[fileName];
             }
 
@@ -8028,7 +8468,7 @@ RULES:
                     throw new Error(`Server returned ${response.status}`);
                 }
             } catch (err) {
-                console.warn(`[Fatbody Framework] Could not fetch ${fileName}, using hardcoded fallback:`, err);
+                console.warn(`[Multihog Framework] Could not fetch ${fileName}, using hardcoded fallback:`, err);
                 content = RT_PROMPTS[fileName];
             }
 
@@ -8593,12 +9033,12 @@ RULES:
                 const response = await fetch(`/scripts/extensions/third-party/${FOLDER_NAME}/${fileName}`);
                 if (response.ok) {
                     content = await response.text();
-                    console.log(`[Fatbody Framework] Loaded ${fileName} from live file for auto-apply.`);
+                    console.log(`[Multihog Framework] Loaded ${fileName} from live file for auto-apply.`);
                 } else {
                     throw new Error(`Server returned ${response.status}`);
                 }
             } catch (err) {
-                console.warn(`[Fatbody Framework] Could not fetch ${fileName}, using hardcoded fallback:`, err);
+                console.warn(`[Multihog Framework] Could not fetch ${fileName}, using hardcoded fallback:`, err);
                 content = RT_PROMPTS[fileName];
             }
 
@@ -9954,7 +10394,7 @@ RULES:
 
         btn.innerHTML = `
             <div class="fa-solid fa-clipboard-list extensionsMenuExtensionButton"></div>
-            <span>Fatbody D&D Framework</span>
+            <span>Multihog D&D Framework</span>
         `;
 
         btn.addEventListener('click', () => {

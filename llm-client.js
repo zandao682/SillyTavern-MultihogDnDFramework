@@ -1,5 +1,5 @@
 /**
- * llm-client.js — Fatbody D&D Framework
+ * llm-client.js — Multihog D&D Framework
  * All external LLM networking. Stateless — reads state via parameter, no DOM.
  * Handles Ollama, OpenAI-compatible, and SillyTavern Profile/generateRaw modes.
  *
@@ -372,7 +372,22 @@ export async function sendStateRequest(settings, systemPrompt, userPrompt, signa
                 }
             }
 
-            if (typeof raw === 'string') return raw;
+            if (typeof raw === 'string') {
+                let parsed = null;
+                if (raw.trim().startsWith('{') && raw.trim().endsWith('}')) {
+                    try { parsed = JSON.parse(raw); } catch (_) { }
+                }
+                if (parsed) {
+                    const text = parsed.content
+                        ?? parsed.message?.content
+                        ?? parsed.choices?.[0]?.message?.content
+                        ?? parsed.choices?.[0]?.text
+                        ?? raw;
+                    logTransaction('Tracker', [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }], text);
+                    return text;
+                }
+                return raw;
+            }
             const r = /** @type {any} */ (raw);
             let text = r?.content
                 ?? r?.message?.content
@@ -452,7 +467,19 @@ export async function sendStateRequest(settings, systemPrompt, userPrompt, signa
 
         let text = "";
         if (typeof result === 'string') {
-            text = result;
+            let parsed = null;
+            if (result.trim().startsWith('{') && result.trim().endsWith('}')) {
+                try { parsed = JSON.parse(result); } catch (_) { }
+            }
+            if (parsed) {
+                text = parsed.choices?.[0]?.message?.content
+                    ?? parsed.choices?.[0]?.text
+                    ?? parsed.message?.content
+                    ?? parsed.content
+                    ?? result;
+            } else {
+                text = result;
+            }
         } else {
             const r = /** @type {any} */ (result);
             text = r?.choices?.[0]?.message?.content
