@@ -2,6 +2,14 @@
 
 All notable changes to the **Multihog D&D Framework** will be documented in this file.
 
+## [3.5.1] - 2026-06-18
+
+### Added
+- **Keyword Scan Prioritization**: Segregated direct matches (keywords found in the current message) from retroactive matches (keywords in lookback history). Direct matches are moved to the end of the keyword Set, prioritizing them and protecting them from cap eviction.
+
+### Changed
+- **World Progression Default Depth**: Changed default World Progression / Report Injection depth from 4 to 3.
+
 ## [3.5.0] - 2026-06-16
 
 ### Added
