@@ -4290,6 +4290,8 @@ function createPanel() {
 
         // Tracks which lorebook folders are open across refreshes
         const _manifestOpenFolders = new Set();
+        // Tracks which manifest entry subfolders are open
+        const _manifestOpenSubFolders = new Set();
         // Tracks entries that have unsaved edits: id → { content, keys, comment }
         /** @type {Map<string, {content:string, keys:string, comment:string}>} */
         const _dirtyEntries = new Map();
@@ -4600,9 +4602,55 @@ function createPanel() {
                         else _manifestOpenFolders.delete(bookName);
                     });
 
-                    for (const item of items) {
-                        const statusColor = item.is_active ? 'var(--rt-accent)' : 'rgba(255,255,255,0.18)';
+                    // Define TreeNode class locally
+                    class TreeNode {
+                        constructor(name, item = null) {
+                            this.name = name;
+                            this.item = item;
+                            /** @type {Map<string, TreeNode>} */
+                            this.children = new Map();
+                            /** @type {TreeNode|null} */
+                            this.parent = null;
+                        }
+                    }
 
+                    const getNodePath = (node, bookName) => {
+                        const parts = [];
+                        let curr = node;
+                        while (curr && curr.name) {
+                            parts.unshift(curr.name);
+                            curr = curr.parent;
+                        }
+                        return bookName + '::' + parts.join('::');
+                    };
+
+                    // Build the hierarchy tree for this lorebook
+                    const rootNode = new TreeNode('');
+                    for (const item of items) {
+                        const parts = item.label.split('::').map(p => p.trim()).filter(Boolean);
+                        if (parts.length === 0) continue;
+                        
+                        let current = rootNode;
+                        for (let i = 0; i < parts.length; i++) {
+                            const part = parts[i];
+                            if (!current.children.has(part)) {
+                                const newNode = new TreeNode(part);
+                                newNode.parent = current;
+                                current.children.set(part, newNode);
+                            }
+                            current = current.children.get(part);
+                            if (i === parts.length - 1) {
+                                current.item = item;
+                            }
+                        }
+                    }
+
+                    // Recursive function to render a node
+                    const renderNode = (node, parentElement) => {
+                        const hasChildren = node.children.size > 0;
+                        const nodePath = getNodePath(node, bookName);
+                        const isDirty = node.item ? _dirtyEntries.has(node.item.id) : false;
+                        
                         const entryEl = document.createElement('div');
                         entryEl.className = 'rt-agent-entry-el';
                         entryEl.style.cssText = 'flex-shrink:0; border-radius:3px;';
@@ -4611,49 +4659,134 @@ function createPanel() {
                         entryHdr.className = 'rt-agent-entry-hdr';
                         entryHdr.style.cssText = 'display:flex; align-items:center; gap:5px; padding:3px 4px; cursor:pointer; border-radius:3px;';
 
-                        const bookNameLower = (item.book || '').toLowerCase();
-                        const isWorldBook = bookNameLower.endsWith('_world') || bookNameLower === 'world';
-
-                        const isDirty = _dirtyEntries.has(item.id);
-                        const entryTokens = Math.round((item.content || '').length / 4);
-                        entryHdr.innerHTML = `
-                                <div style="width:5px; height:5px; border-radius:50%; background:${statusColor}; flex-shrink:0;" title="${item.is_active ? 'Active (visible to agent)' : 'Inactive'}"></div>
-                                <span style="flex:1; font-size:10px; color:var(--rt-text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(item.label)}${isDirty ? ' <span style="color:#ffa500; font-size:8px;" title="Unsaved edits">●</span>' : ''}</span>
-                                <span style="font-size:8px; opacity:0.5; color:var(--rt-text-muted); margin-right:5px; flex-shrink:0; background:rgba(255,255,255,0.06); padding:1px 4px; border-radius:4px;" title="Estimated tokens">${entryTokens}t</span>
-                                ${!isWorldBook ? `<button class="rt-agent-entry-clean" data-id="${item.id}" style="background:none; border:none; color:#e67e22; cursor:pointer; font-size:9px; padding:1px 3px; flex-shrink:0;" title="Run targeted cleanup for this entry"><i class="fa-solid fa-broom"></i></button>` : ''}
-                                <button class="rt-agent-entry-edit" data-id="${item.id}" style="background:none; border:none; color:var(--rt-accent); cursor:pointer; font-size:9px; padding:1px 3px; flex-shrink:0;" title="Edit this lore entry"><i class="fa-solid fa-pen-to-square"></i></button>
-                                <button class="rt-agent-entry-delete" data-id="${item.id}" style="background:none; border:none; color:var(--rt-text-muted); cursor:pointer; font-size:9px; padding:1px 3px; flex-shrink:0;" title="Delete entry"><i class="fa-solid fa-trash"></i></button>
-                            `;
-
-                        const dirtySnap = isDirty ? _dirtyEntries.get(item.id) : null;
-                        const entryBody = buildEntryBody(item, entryHdr, {
-                            stale: !!isDirty,
-                            dirty: dirtySnap || null,
-                        });
-                        if (_openEntries.has(item.id)) {
-                            entryBody.style.display = 'flex';
-                            entryHdr.style.background = 'rgba(255,255,255,0.05)';
-                            entryEl.classList.add('open');
+                        // Chevron toggle
+                        let chevronHtml = '';
+                        let childrenContainer = null;
+                        if (hasChildren) {
+                            const isSubOpen = _manifestOpenSubFolders.has(nodePath);
+                            chevronHtml = `<span class="rt-agent-subfolder-toggle" style="font-size:9px; opacity:0.5; width:10px; flex-shrink:0; font-family:monospace; text-align:center; cursor:pointer;">${isSubOpen ? '▼' : '▶'}</span>`;
+                            
+                            childrenContainer = document.createElement('div');
+                            childrenContainer.className = 'rt-agent-entry-children';
+                            childrenContainer.style.cssText = `display:${isSubOpen ? 'flex' : 'none'}; flex-direction:column; border-left:1px solid rgba(255,255,255,0.07); margin-left:10px; padding-left:6px; gap:1px; padding-top:2px; padding-bottom:2px;`;
+                        } else {
+                            chevronHtml = `<span style="width:10px; flex-shrink:0;"></span>`;
                         }
 
-                        entryHdr.addEventListener('click', (e) => {
-                            if (/** @type {HTMLElement} */ (e.target).closest('.rt-agent-entry-delete, .rt-agent-entry-clean, .rt-agent-entry-edit')) return;
-                            const opening = entryBody.style.display === 'none';
-                            entryBody.style.display = opening ? 'flex' : 'none';
-                            entryHdr.style.background = opening ? 'rgba(255,255,255,0.05)' : '';
-                            if (opening) {
-                                _openEntries.add(item.id);
+                        // Status dot
+                        let statusDotHtml = '';
+                        if (node.item) {
+                            const statusColor = node.item.is_active ? 'var(--rt-accent)' : 'rgba(255,255,255,0.18)';
+                            statusDotHtml = `<div style="width:5px; height:5px; border-radius:50%; background:${statusColor}; flex-shrink:0;" title="${node.item.is_active ? 'Active (visible to agent)' : 'Inactive'}"></div>`;
+                        } else {
+                            statusDotHtml = `<div style="width:5px; height:5px; border-radius:50%; border:1px dashed rgba(255,255,255,0.25); box-sizing:border-box; flex-shrink:0;" title="Virtual parent placeholder (entry not created yet)"></div>`;
+                        }
+
+                        // Label style
+                        const labelStyle = node.item
+                            ? 'flex:1; font-size:10px; color:var(--rt-text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;'
+                            : 'flex:1; font-size:10px; color:var(--rt-text-muted); font-style:italic; opacity:0.6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+
+                        // Tokens and action buttons
+                        let tokensHtml = '';
+                        let cleanHtml = '';
+                        let editHtml = '';
+                        let deleteHtml = '';
+
+                        const bookNameLower = (bookName || '').toLowerCase();
+                        const isWorldBook = bookNameLower.endsWith('_world') || bookNameLower === 'world';
+
+                        if (node.item) {
+                            const entryTokens = Math.round((node.item.content || '').length / 4);
+                            tokensHtml = `<span style="font-size:8px; opacity:0.5; color:var(--rt-text-muted); margin-right:5px; flex-shrink:0; background:rgba(255,255,255,0.06); padding:1px 4px; border-radius:4px;" title="Estimated tokens">${entryTokens}t</span>`;
+                            cleanHtml = !isWorldBook ? `<button class="rt-agent-entry-clean" data-id="${node.item.id}" style="background:none; border:none; color:#e67e22; cursor:pointer; font-size:9px; padding:1px 3px; flex-shrink:0;" title="Run targeted cleanup for this entry"><i class="fa-solid fa-broom"></i></button>` : '';
+                            editHtml = `<button class="rt-agent-entry-edit" data-id="${node.item.id}" style="background:none; border:none; color:var(--rt-accent); cursor:pointer; font-size:9px; padding:1px 3px; flex-shrink:0;" title="Edit this lore entry"><i class="fa-solid fa-pen-to-square"></i></button>`;
+                            deleteHtml = `<button class="rt-agent-entry-delete" data-id="${node.item.id}" style="background:none; border:none; color:var(--rt-text-muted); cursor:pointer; font-size:9px; padding:1px 3px; flex-shrink:0;" title="Delete entry"><i class="fa-solid fa-trash"></i></button>`;
+                        }
+
+                        entryHdr.innerHTML = `
+                            ${chevronHtml}
+                            ${statusDotHtml}
+                            <span class="rt-agent-entry-label-span" style="${labelStyle}">${escapeHtml(node.name)}${isDirty ? ' <span style="color:#ffa500; font-size:8px;" title="Unsaved edits">●</span>' : ''}</span>
+                            ${tokensHtml}
+                            ${cleanHtml}
+                            ${editHtml}
+                            ${deleteHtml}
+                        `;
+
+                        let entryBody = null;
+                        if (node.item) {
+                            const dirtySnap = isDirty ? _dirtyEntries.get(node.item.id) : null;
+                            entryBody = buildEntryBody(node.item, entryHdr, {
+                                stale: !!isDirty,
+                                dirty: dirtySnap || null,
+                            });
+                            if (_openEntries.has(node.item.id)) {
+                                entryBody.style.display = 'flex';
+                                entryHdr.style.background = 'rgba(255,255,255,0.05)';
                                 entryEl.classList.add('open');
-                            } else {
-                                _openEntries.delete(item.id);
-                                entryEl.classList.remove('open');
                             }
-                        });
+                        }
+
+                        // Event Listeners
+                        if (hasChildren) {
+                            const toggleBtn = entryHdr.querySelector('.rt-agent-subfolder-toggle');
+                            const toggleSubfolder = (e) => {
+                                e.stopPropagation();
+                                const opening = childrenContainer.style.display === 'none';
+                                childrenContainer.style.display = opening ? 'flex' : 'none';
+                                if (toggleBtn) {
+                                    toggleBtn.textContent = opening ? '▼' : '▶';
+                                }
+                                if (opening) {
+                                    _manifestOpenSubFolders.add(nodePath);
+                                } else {
+                                    _manifestOpenSubFolders.delete(nodePath);
+                                }
+                            };
+                            if (toggleBtn) {
+                                toggleBtn.addEventListener('click', toggleSubfolder);
+                            }
+                            if (!node.item) {
+                                entryHdr.addEventListener('click', toggleSubfolder);
+                            }
+                        }
+
+                        if (node.item) {
+                            entryHdr.addEventListener('click', (e) => {
+                                if (/** @type {HTMLElement} */ (e.target).closest('.rt-agent-subfolder-toggle, .rt-agent-entry-delete, .rt-agent-entry-clean, .rt-agent-entry-edit')) return;
+                                const opening = entryBody.style.display === 'none';
+                                entryBody.style.display = opening ? 'flex' : 'none';
+                                entryHdr.style.background = opening ? 'rgba(255,255,255,0.05)' : '';
+                                if (opening) {
+                                    _openEntries.add(node.item.id);
+                                    entryEl.classList.add('open');
+                                } else {
+                                    _openEntries.delete(node.item.id);
+                                    entryEl.classList.remove('open');
+                                }
+                            });
+                        }
 
                         entryEl.appendChild(entryHdr);
-                        entryEl.appendChild(entryBody);
-                        folderBody.appendChild(entryEl);
+                        if (entryBody) {
+                            entryEl.appendChild(entryBody);
+                        }
+                        if (hasChildren) {
+                            entryEl.appendChild(childrenContainer);
+                            const sortedKeys = Array.from(node.children.keys()).sort((a, b) => a.localeCompare(b));
+                            for (const key of sortedKeys) {
+                                renderNode(node.children.get(key), childrenContainer);
+                            }
+                        }
 
+                        parentElement.appendChild(entryEl);
+                    };
+
+                    // Render tree children under folderBody
+                    const sortedRootKeys = Array.from(rootNode.children.keys()).sort((a, b) => a.localeCompare(b));
+                    for (const key of sortedRootKeys) {
+                        renderNode(rootNode.children.get(key), folderBody);
                     }
 
                     folder.appendChild(folderHdr);

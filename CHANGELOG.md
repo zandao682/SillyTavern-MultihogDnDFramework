@@ -2,6 +2,12 @@
 
 All notable changes to the **Multihog D&D Framework** will be documented in this file.
 
+## [3.6.0] - 2026-06-18
+
+### Added
+- **Hierarchical/Nested Location Display**: Implemented collapsible tree structures for lorebook items using `::` separators in entry labels. Children elements display nested and indented under parent nodes.
+- **Virtual Parent Resolution**: Designed tree builder to automatically resolve parent nodes even if they haven't been created yet by the AI (rendered as italicized placeholder nodes). When retroactively created, they instantly transform into real editable entry nodes while preserving child nesting.
+
 ## [3.5.9] - 2026-06-18
 
 ### Changed

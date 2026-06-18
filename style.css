@@ -2526,12 +2526,12 @@
 }
 
 /* Show buttons when header is hovered or entry parent is open (expanded) */
-.rpg-tracker-panel .rt-agent-entry-hdr:hover .rt-agent-entry-clean,
-.rpg-tracker-panel .rt-agent-entry-hdr:hover .rt-agent-entry-edit,
-.rpg-tracker-panel .rt-agent-entry-hdr:hover .rt-agent-entry-delete,
-.rpg-tracker-panel .rt-agent-entry-el.open .rt-agent-entry-clean,
-.rpg-tracker-panel .rt-agent-entry-el.open .rt-agent-entry-edit,
-.rpg-tracker-panel .rt-agent-entry-el.open .rt-agent-entry-delete {
+.rpg-tracker-panel .rt-agent-entry-hdr:hover > .rt-agent-entry-clean,
+.rpg-tracker-panel .rt-agent-entry-hdr:hover > .rt-agent-entry-edit,
+.rpg-tracker-panel .rt-agent-entry-hdr:hover > .rt-agent-entry-delete,
+.rpg-tracker-panel .rt-agent-entry-el.open > .rt-agent-entry-hdr > .rt-agent-entry-clean,
+.rpg-tracker-panel .rt-agent-entry-el.open > .rt-agent-entry-hdr > .rt-agent-entry-edit,
+.rpg-tracker-panel .rt-agent-entry-el.open > .rt-agent-entry-hdr > .rt-agent-entry-delete {
     opacity: 0.5;
 }
 
