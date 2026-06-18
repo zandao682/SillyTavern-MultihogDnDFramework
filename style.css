@@ -2516,3 +2516,29 @@
     flex-direction: column;
     gap: 3px;
 }
+
+/* Manifest action buttons transition & hover opacity */
+.rpg-tracker-panel .rt-agent-entry-clean,
+.rpg-tracker-panel .rt-agent-entry-edit,
+.rpg-tracker-panel .rt-agent-entry-delete {
+    opacity: 0;
+    transition: opacity 0.15s ease-in-out !important;
+}
+
+/* Show buttons when header is hovered or entry parent is open (expanded) */
+.rpg-tracker-panel .rt-agent-entry-hdr:hover .rt-agent-entry-clean,
+.rpg-tracker-panel .rt-agent-entry-hdr:hover .rt-agent-entry-edit,
+.rpg-tracker-panel .rt-agent-entry-hdr:hover .rt-agent-entry-delete,
+.rpg-tracker-panel .rt-agent-entry-el.open .rt-agent-entry-clean,
+.rpg-tracker-panel .rt-agent-entry-el.open .rt-agent-entry-edit,
+.rpg-tracker-panel .rt-agent-entry-el.open .rt-agent-entry-delete {
+    opacity: 0.5;
+}
+
+/* Highlight buttons fully when hovered directly */
+.rpg-tracker-panel .rt-agent-entry-clean:hover,
+.rpg-tracker-panel .rt-agent-entry-edit:hover,
+.rpg-tracker-panel .rt-agent-entry-delete:hover {
+    opacity: 1 !important;
+}
+

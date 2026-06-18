@@ -4300,7 +4300,7 @@ function createPanel() {
          * @param {object} item - manifest row from getLorebookManifest
          * @param {{ stale?: boolean, dirty?: {content:string, keys:string, comment:string} | null }} [opts]
          */
-        const buildEntryBody = (item, opts = {}) => {
+        const buildEntryBody = (item, entryHdr, opts = {}) => {
             const body = document.createElement('div');
             body.style.cssText = 'display:none; padding:4px 4px 6px 12px; flex-direction:column; gap:5px;';
             body.dataset.entryId = item.id;
@@ -4324,29 +4324,12 @@ function createPanel() {
             contentRead.style.cssText = 'font-size:10px; opacity:0.88; color:var(--rt-text); line-height:1.45; white-space:pre-wrap; word-break:break-word; max-height:220px; overflow-y:auto;';
             contentRead.textContent = item.content || '';
 
-            const readActions = document.createElement('div');
-            readActions.style.cssText = 'display:flex; justify-content:flex-end; margin-top:2px;';
-            const cleanBtn = document.createElement('button');
-            cleanBtn.type = 'button';
-            cleanBtn.textContent = 'Clean';
-            cleanBtn.title = 'Run targeted cleanup for this entry';
-            cleanBtn.style.cssText = 'background:rgba(230,126,34,0.12); border:1px solid rgba(230,126,34,0.35); color:#e67e22; border-radius:3px; font-size:9px; padding:2px 10px; cursor:pointer; margin-right:5px;';
-            const editBtn = document.createElement('button');
-            editBtn.type = 'button';
-            editBtn.textContent = 'Edit';
-            editBtn.title = 'Edit this lore entry';
-            editBtn.style.cssText = 'background:rgba(80,140,255,0.12); border:1px solid rgba(80,140,255,0.35); color:var(--rt-accent); border-radius:3px; font-size:9px; padding:2px 10px; cursor:pointer;';
-            
-            const bookNameLower = (item.book || '').toLowerCase();
-            const isWorldBook = bookNameLower.endsWith('_world') || bookNameLower === 'world';
-            if (!isWorldBook) {
-                readActions.appendChild(cleanBtn);
-            }
-            readActions.appendChild(editBtn);
+            const cleanBtn = entryHdr.querySelector('.rt-agent-entry-clean');
+            const editBtn = entryHdr.querySelector('.rt-agent-entry-edit');
+            const delBtn = entryHdr.querySelector('.rt-agent-entry-delete');
 
             readPane.appendChild(keysRead);
             readPane.appendChild(contentRead);
-            readPane.appendChild(readActions);
             body.appendChild(readPane);
 
             const syncReadFromItem = () => {
@@ -4436,59 +4419,63 @@ function createPanel() {
                 editPane.style.display = 'flex';
             }
 
-            cleanBtn.addEventListener('click', async (e) => {
-                e.stopPropagation();
-                if (isRouterRunning()) {
-                    // @ts-ignore
-                    toastr.warning('Agent is already running.', 'Lorebook Agent');
-                    return;
-                }
-
-                const { Popup } = SillyTavern.getContext();
-                const promptHtml = `
-                        <div style="text-align: left; font-size: 0.9em; line-height: 1.4;">
-                            <p>You are triggering a targeted cleanup pass for <b>${escapeHtml(item.label)}</b>.</p>
-                            <p style="margin-top: 8px;">Enter custom requirements for this entry's compression (e.g., <i>"Keep the personality section intact"</i> or <i>"Shorten to 3 concise bullet points"</i>):</p>
-                            <textarea id="rt-entry-clean-instructions" style="width: 100%; height: 60px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 4px; padding: 5px; font-size: 12px; box-sizing: border-box; resize: none; margin-top: 5px;" placeholder="Leave blank for standard compression..."></textarea>
-                        </div>
-                    `;
-
-                const choice = await Popup.show.confirm('🧹 Targeted Entry Cleanup', promptHtml, {
-                    okButton: 'Clean Entry',
-                    cancelButton: 'Cancel'
-                });
-
-                if (choice) {
-                    const textarea = document.getElementById('rt-entry-clean-instructions');
-                    const customInstructions = textarea ? textarea.value.trim() : '';
-
-                    const parts = item.id.split('::');
-                    if (parts.length >= 2) {
-                        const b = parts[0];
-                        const u = parts[1];
-                        let manualPrompt = `__CLEANUP__::${b}::${u}`;
-                        if (customInstructions) {
-                            manualPrompt += `::${customInstructions}`;
-                        }
-                        runRouterPass(null, manualPrompt, null, true);
+            if (cleanBtn) {
+                cleanBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    if (isRouterRunning()) {
+                        // @ts-ignore
+                        toastr.warning('Agent is already running.', 'Lorebook Agent');
+                        return;
                     }
-                }
-            });
 
-            editBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                titleInp.value = item.label;
-                keysInp.value = item.keys.join(', ');
-                contentArea.value = item.content || '';
-                const snap = _dirtyEntries.get(item.id);
-                if (snap) {
-                    if (snap.comment !== undefined) titleInp.value = snap.comment;
-                    if (snap.keys !== undefined) keysInp.value = snap.keys;
-                    if (snap.content !== undefined) contentArea.value = snap.content;
-                }
-                readPane.style.display = 'none';
-                editPane.style.display = 'flex';
-            });
+                    const { Popup } = SillyTavern.getContext();
+                    const promptHtml = `
+                            <div style="text-align: left; font-size: 0.9em; line-height: 1.4;">
+                                <p>You are triggering a targeted cleanup pass for <b>${escapeHtml(item.label)}</b>.</p>
+                                <p style="margin-top: 8px;">Enter custom requirements for this entry's compression (e.g., <i>"Keep the personality section intact"</i> or <i>"Shorten to 3 concise bullet points"</i>):</p>
+                                <textarea id="rt-entry-clean-instructions" style="width: 100%; height: 60px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2); color: white; border-radius: 4px; padding: 5px; font-size: 12px; box-sizing: border-box; resize: none; margin-top: 5px;" placeholder="Leave blank for standard compression..."></textarea>
+                            </div>
+                        `;
+
+                    const choice = await Popup.show.confirm('🧹 Targeted Entry Cleanup', promptHtml, {
+                        okButton: 'Clean Entry',
+                        cancelButton: 'Cancel'
+                    });
+
+                    if (choice) {
+                        const textarea = document.getElementById('rt-entry-clean-instructions');
+                        const customInstructions = textarea ? textarea.value.trim() : '';
+
+                        const parts = item.id.split('::');
+                        if (parts.length >= 2) {
+                            const b = parts[0];
+                            const u = parts[1];
+                            let manualPrompt = `__CLEANUP__::${b}::${u}`;
+                            if (customInstructions) {
+                                manualPrompt += `::${customInstructions}`;
+                            }
+                            runRouterPass(null, manualPrompt, null, true);
+                        }
+                    }
+                });
+            }
+
+            if (editBtn) {
+                editBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    titleInp.value = item.label;
+                    keysInp.value = item.keys.join(', ');
+                    contentArea.value = item.content || '';
+                    const snap = _dirtyEntries.get(item.id);
+                    if (snap) {
+                        if (snap.comment !== undefined) titleInp.value = snap.comment;
+                        if (snap.keys !== undefined) keysInp.value = snap.keys;
+                        if (snap.content !== undefined) contentArea.value = snap.content;
+                    }
+                    readPane.style.display = 'none';
+                    editPane.style.display = 'flex';
+                });
+            }
 
             saveBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
@@ -4533,6 +4520,22 @@ function createPanel() {
                 readPane.style.display = 'flex';
                 editPane.style.display = 'none';
             });
+
+            if (delBtn) {
+                delBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    if (confirm(`Delete lore entry "${item.label}"?`)) {
+                        const ok = await deleteLorebookEntry(item.id);
+                        if (ok) {
+                            _dirtyEntries.delete(item.id);
+                            _openEntries.delete(item.id);
+                            await refreshManifest();
+                            // @ts-ignore
+                            toastr.success(`Deleted "${item.label}"`, 'Lorebook Agent');
+                        }
+                    }
+                });
+            }
 
             return body;
         };
@@ -4601,10 +4604,15 @@ function createPanel() {
                         const statusColor = item.is_active ? 'var(--rt-accent)' : 'rgba(255,255,255,0.18)';
 
                         const entryEl = document.createElement('div');
+                        entryEl.className = 'rt-agent-entry-el';
                         entryEl.style.cssText = 'flex-shrink:0; border-radius:3px;';
 
                         const entryHdr = document.createElement('div');
+                        entryHdr.className = 'rt-agent-entry-hdr';
                         entryHdr.style.cssText = 'display:flex; align-items:center; gap:5px; padding:3px 4px; cursor:pointer; border-radius:3px;';
+
+                        const bookNameLower = (item.book || '').toLowerCase();
+                        const isWorldBook = bookNameLower.endsWith('_world') || bookNameLower === 'world';
 
                         const isDirty = _dirtyEntries.has(item.id);
                         const entryTokens = Math.round((item.content || '').length / 4);
@@ -4612,50 +4620,40 @@ function createPanel() {
                                 <div style="width:5px; height:5px; border-radius:50%; background:${statusColor}; flex-shrink:0;" title="${item.is_active ? 'Active (visible to agent)' : 'Inactive'}"></div>
                                 <span style="flex:1; font-size:10px; color:var(--rt-text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(item.label)}${isDirty ? ' <span style="color:#ffa500; font-size:8px;" title="Unsaved edits">●</span>' : ''}</span>
                                 <span style="font-size:8px; opacity:0.5; color:var(--rt-text-muted); margin-right:5px; flex-shrink:0; background:rgba(255,255,255,0.06); padding:1px 4px; border-radius:4px;" title="Estimated tokens">${entryTokens}t</span>
-                                <button class="rt-agent-entry-delete" data-id="${item.id}" style="background:none; border:none; color:var(--rt-text-muted); cursor:pointer; font-size:9px; padding:1px 3px; opacity:0; flex-shrink:0;" title="Delete entry"><i class="fa-solid fa-trash"></i></button>
+                                ${!isWorldBook ? `<button class="rt-agent-entry-clean" data-id="${item.id}" style="background:none; border:none; color:#e67e22; cursor:pointer; font-size:9px; padding:1px 3px; flex-shrink:0;" title="Run targeted cleanup for this entry"><i class="fa-solid fa-broom"></i></button>` : ''}
+                                <button class="rt-agent-entry-edit" data-id="${item.id}" style="background:none; border:none; color:var(--rt-accent); cursor:pointer; font-size:9px; padding:1px 3px; flex-shrink:0;" title="Edit this lore entry"><i class="fa-solid fa-pen-to-square"></i></button>
+                                <button class="rt-agent-entry-delete" data-id="${item.id}" style="background:none; border:none; color:var(--rt-text-muted); cursor:pointer; font-size:9px; padding:1px 3px; flex-shrink:0;" title="Delete entry"><i class="fa-solid fa-trash"></i></button>
                             `;
 
                         const dirtySnap = isDirty ? _dirtyEntries.get(item.id) : null;
-                        const entryBody = buildEntryBody(item, {
+                        const entryBody = buildEntryBody(item, entryHdr, {
                             stale: !!isDirty,
                             dirty: dirtySnap || null,
                         });
                         if (_openEntries.has(item.id)) {
                             entryBody.style.display = 'flex';
                             entryHdr.style.background = 'rgba(255,255,255,0.05)';
+                            entryEl.classList.add('open');
                         }
 
-                        // Show delete button on hover
-                        const delBtn = /** @type {HTMLButtonElement} */ (entryHdr.querySelector('.rt-agent-entry-delete'));
-                        entryHdr.addEventListener('mouseenter', () => { delBtn.style.opacity = '0.5'; });
-                        entryHdr.addEventListener('mouseleave', () => { delBtn.style.opacity = '0'; });
-
                         entryHdr.addEventListener('click', (e) => {
-                            if (/** @type {HTMLElement} */ (e.target).closest('.rt-agent-entry-delete')) return;
+                            if (/** @type {HTMLElement} */ (e.target).closest('.rt-agent-entry-delete, .rt-agent-entry-clean, .rt-agent-entry-edit')) return;
                             const opening = entryBody.style.display === 'none';
                             entryBody.style.display = opening ? 'flex' : 'none';
                             entryHdr.style.background = opening ? 'rgba(255,255,255,0.05)' : '';
-                            if (opening) _openEntries.add(item.id);
-                            else _openEntries.delete(item.id);
-                        });
-
-                        delBtn.addEventListener('click', async (e) => {
-                            e.stopPropagation();
-                            if (confirm(`Delete lore entry "${item.label}"?`)) {
-                                const ok = await deleteLorebookEntry(item.id);
-                                if (ok) {
-                                    _dirtyEntries.delete(item.id);
-                                    _openEntries.delete(item.id);
-                                    refreshManifest();
-                                    // @ts-ignore
-                                    toastr.success(`Deleted "${item.label}"`, 'Lorebook Agent');
-                                }
+                            if (opening) {
+                                _openEntries.add(item.id);
+                                entryEl.classList.add('open');
+                            } else {
+                                _openEntries.delete(item.id);
+                                entryEl.classList.remove('open');
                             }
                         });
 
                         entryEl.appendChild(entryHdr);
                         entryEl.appendChild(entryBody);
                         folderBody.appendChild(entryEl);
+
                     }
 
                     folder.appendChild(folderHdr);
