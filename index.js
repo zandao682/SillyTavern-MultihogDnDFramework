@@ -7706,6 +7706,12 @@ function buildSysprompt(rawText) {
 
                 console.log(`[RPG Tracker] Automatically reset Lorebook Agent prompts to defaults for version ${currentVersion}.`);
                 toastr['info'](`Lorebook Agent prompts have been updated to the latest version (${currentVersion}) defaults.`, 'RPG Tracker');
+
+                if (!fresh.customSysprompt) {
+                    await autoApplySysprompt();
+                    console.log(`[RPG Tracker] Automatically updated system prompt to version ${currentVersion} defaults.`);
+                    toastr['info'](`Main system prompt has been updated and reapplied.`, 'RPG Tracker');
+                }
             }
         }
 
