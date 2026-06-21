@@ -89,13 +89,11 @@ Together they solve the four core problems of LLM tabletop RP: the AI forgetting
 You can scrap the entire system prompt and all the default fields and track your own things completely. The D&D setup is just a plug & play system that works by default. 
 
 ## What Model to Use?
-Your primary narrator model must support **Tool Calling** for the Hybrid RNG system to work properly. 
+Your primary narrator model must support **Tool Calling** for the Hybrid RNG system to work properly, though this is only relevant if you're using tool calls. The extension also works without them (selectable in the settings.)
 
 <img width="920" height="246" alt="image" src="https://github.com/user-attachments/assets/f663cb1e-554a-40a2-a25e-f7af62c1a032" />
 
-I like Deepseek 4 a lot so far, though it's still a new model. Gemini 3 is a good all-rounder; very fast and cheap. Sometimes its pace can be a bit much, though. GLM 5.1 is also a solid choice, but it can tend to reason far too long, bogging things down, especially in combat. Experimentation with different models is recommended.
-
-For the state pass, I use Gemini 3.1 Flash Lite or Flash 3 with low reasoning. Very cheap and very good.
+For the State Tracker and Lorebook Agent, use Gemini 3.1 Flash. It's good enough and costs peanuts. For the GM/Narrator, MiMo 2.5 Pro in my opinion has the best quality-price ratio. Experiment.
 
 ---
 
