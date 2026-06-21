@@ -894,6 +894,12 @@ function formatValueToCurrency(totalCp, detectedCurrency) {
                     const worthRx = /\s*\(~([^)]+)\)\s*$|\s*\(Worth:\s*([^)]+)\)\s*$/i;
 
                     pendingBullets.forEach(i => {
+                        // ── Equipped tag: detect [E] and strip from display ──────────────────
+                        const equippedRx = /\s*\[E\]\s*/i;
+                        const isEquipped = equippedRx.test(i);
+                        if (isEquipped) i = i.replace(equippedRx, ' ').trim();
+                        const equippedClass = isEquipped ? ' rt-inventory-item--equipped' : '';
+
                         const worthMatch = i.match(worthRx);
                         let displayText = i;
                         let titleAttr = '';
@@ -905,7 +911,22 @@ function formatValueToCurrency(totalCp, detectedCurrency) {
                             trackCurrency(worthVal);
                             totalCp += parseValueToCopper(worthVal);
                             displayText = i.replace(worthRx, '').trim();
-                            titleAttr = ` title="Worth: ${escapeHtml(worthVal)}"`;
+
+                            // Extract effect/stats parenthetical: last (...) group before the worth
+                            // that looks mechanical (contains at least one digit)
+                            const effectRx = /\s*\(([^)~][^)]*)\)\s*$/;
+                            const effectMatch = displayText.match(effectRx);
+                            let effectVal = '';
+                            if (effectMatch && /\d/.test(effectMatch[1])) {
+                                effectVal = effectMatch[1].trim();
+                                displayText = displayText.replace(effectRx, '').trim();
+                            }
+
+                            // Build tooltip combining effect (if any) and worth
+                            const tooltipParts = [];
+                            if (effectVal) tooltipParts.push(`Effect: ${effectVal}`);
+                            tooltipParts.push(`Worth: ${worthVal}`);
+                            titleAttr = ` title="${escapeHtml(tooltipParts.join('\n'))}"`;
 
                             if (worthMode === 'display') {
                                 // Show coin badge inline next to item text
@@ -915,7 +936,7 @@ function formatValueToCurrency(totalCp, detectedCurrency) {
                                 }
                             }
                             // In 'hover' mode: worth is tooltip only — no badge
-                            inventoryResults.push(`<div class="rt-card-item rt-inventory-item"${titleAttr}>${escapeHtmlWithColor(displayText)}${coinBadge}</div>`);
+                            inventoryResults.push(`<div class="rt-card-item rt-inventory-item${equippedClass}"${titleAttr}>${escapeHtmlWithColor(displayText)}${coinBadge}</div>`);
                         } else if (BARE_CURRENCY_RX.test(i.trim())) {
                             // This line IS a currency amount (e.g. "45 GP", "💰 45 GP")
                             // Strip any leading bullet dash — safety guard (pendingBullets already strips it,
@@ -939,7 +960,7 @@ function formatValueToCurrency(totalCp, detectedCurrency) {
                                 inventoryResults.push(`<div class="rt-card-item rt-inventory-item">${escapeHtmlWithColor(cleanText)}</div>`);
                             }
                         } else {
-                            inventoryResults.push(`<div class="rt-card-item rt-inventory-item">${escapeHtmlWithColor(displayText)}</div>`);
+                            inventoryResults.push(`<div class="rt-card-item rt-inventory-item${equippedClass}">${escapeHtmlWithColor(displayText)}</div>`);
                         }
                     });
                     pendingBullets.length = 0;
@@ -950,6 +971,13 @@ function formatValueToCurrency(totalCp, detectedCurrency) {
                     if (asMarker !== null) {
                         flushBullets();
                         inventoryResults.push(asMarker);
+                        continue;
+                    }
+                    // Section subheader (e.g. "Gear:", "Other Items:") — plain text header line
+                    if (/^[A-Za-z][A-Za-z\s]*:\s*$/.test(line.trim())) {
+                        flushBullets();
+                        const headerText = line.trim().replace(/:$/, '').trim();
+                        inventoryResults.push(`<div class="rt-inventory-subheader">${escapeHtml(headerText)}</div>`);
                         continue;
                     }
                     // Original bullet/comma logic

@@ -400,6 +400,7 @@ Example: [[FAC: Iron Syndicate | ...]]  NOT  [[FAC: Khelt :: Iron Syndicate | ..
         worldOpenaiKey: "",
         worldOpenaiModel: "",
         lastResetVersion: "",
+        autoResetPromptsOnUpdate: false,
     };
 
     if (!extensionSettings[MODULE_NAME]) {
@@ -533,6 +534,21 @@ Example: [[FAC: Iron Syndicate | ...]]  NOT  [[FAC: Khelt :: Iron Syndicate | ..
     const OLD_PARTY_SNIPPET = 'Att/def: Weapon (stats) | Armor (AC: Z)';
     if (s.stockPrompts?.party && s.stockPrompts.party.includes(OLD_PARTY_SNIPPET)) {
         s.stockPrompts.party = DEFAULT_STOCK_PROMPTS.party;
+    }
+
+    // ── MIGRATION: INVENTORY prompt → Gear / Other Items split (v3.7.2) ───────────
+    const OLD_INVENTORY_SNIPPET = '- 🗡️ [Rare] Flame Dagger (1d6+3 fire)';
+    if (s.stockPrompts?.inventory &&
+        s.stockPrompts.inventory.includes(OLD_INVENTORY_SNIPPET) &&
+        !s.stockPrompts.inventory.includes('Gear:')) {
+        s.stockPrompts.inventory = DEFAULT_STOCK_PROMPTS.inventory;
+    }
+
+    // ── MIGRATION: INVENTORY prompt → [E] equipped tag + slot list (v3.7.4) ──────
+    if (s.stockPrompts?.inventory &&
+        s.stockPrompts.inventory.includes('Gear:') &&
+        !s.stockPrompts.inventory.includes('[E]')) {
+        s.stockPrompts.inventory = DEFAULT_STOCK_PROMPTS.inventory;
     }
 
     return extensionSettings[MODULE_NAME];

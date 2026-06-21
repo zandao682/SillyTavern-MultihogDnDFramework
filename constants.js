@@ -87,17 +87,29 @@ Status: Effect (duration)
 You MUST output \`[COMBAT]END_COMBAT[/COMBAT]\` when the narrative ends combat. Do not put members of [PARTY] into [COMBAT].`,
     inventory: `Items, loot, equipment, and wealth. You MAY create this section if loot is found and it doesn't currently exist.
 
+Organize into two sections using plain-text headers:
+- Gear: — weapons, armor, and worn/equipped items
+- Other Items: — potions, tools, miscellaneous loot, and currency
+
 MANDATORY FORMAT FOR EVERY ITEM:
 - Every item MUST have a rarity classification tag: [Common], [Uncommon], [Rare], [Epic], [Legendary], or [Artifact]
-- Every item MUST have a thematic emoji prefix before the item name
-- Every item MUST have an estimated worth in parentheses at the end: (~X currency) where currency fits the world setting (GP, SP, CP, Dollars, Caps, etc.)
-- Currency is NOT enforced — use whatever fits the setting
+- Every item MUST have a thematic emoji prefix before the rarity tag
+- Gear with combat stats MUST include them in parentheses before the worth: e.g. (1d8+1 Slashing) or (AC +2)
+- Every item MUST have an estimated worth at the end: (~X currency) where currency fits the world setting (GP, SP, CP, Dollars, Caps, etc.)
+- Bare currency (e.g. "💰 1,200 GP") goes under Other Items — no rarity tag needed
+
+EQUIPPED ITEMS: Tag any actively worn or held item with [E] immediately after the rarity tag.
+- Valid equipment slots (one item per slot, except Finger which allows ×2):
+  Head, Neck, Chest, Back, Hands, Finger, Waist, Feet, Main Hand, Off Hand
+- An item in 'Gear:' without [E] is carried but NOT currently worn or held.
 
 Example:
 [INVENTORY]
-- 🗡️ [Rare] Flame Dagger (1d6+3 fire) (~120 GP)
-- 🧪 [Uncommon] Healing Potion (~50 GP)
+Gear:
+- 🗡️ [Rare] [E] Flame Dagger (1d6+2 Fire, +1 to hit) (~350 GP)
 - 🛡️ [Common] Iron Buckler (AC +2) (~15 GP)
+Other Items:
+- 🧪 [Uncommon] Healing Potion (Restores 2d4+2 HP) (~50 GP)
 - 🪢 [Common] Rope, 50 ft (~1 GP)
 - 💰 1,200 GP
 [/INVENTORY]`,
@@ -271,6 +283,8 @@ When any character finds an item, pop a d20:
 11–15—Useful/quality
 16–19—Rare/notable
 20—Exceptional
+
+When narrating discovered items, include their rarity tier, any relevant combat properties or effects (damage dice, AC bonus, special properties), and an approximate value — this allows the State Tracker to record them accurately.
 </loot>
 
 <random_events>
@@ -518,6 +532,8 @@ When any character finds an item, pop a d20:
 11–15—Useful/quality
 16–19—Rare/notable
 20—Exceptional
+
+When narrating discovered items, include their rarity tier, any relevant combat properties or effects (damage dice, AC bonus, special properties), and an approximate value — this allows the State Tracker to record them accurately.
 </loot>
 
 <random_events>

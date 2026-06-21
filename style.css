@@ -1128,6 +1128,34 @@
     border-radius: 3px;
 }
 
+/* Equipped item highlight ([E] tag) */
+.rt-inventory-item--equipped {
+    border-left: 2px solid rgba(180, 220, 100, 0.55);
+    padding-left: 5px;
+    background: rgba(140, 220, 80, 0.04);
+    border-radius: 3px;
+}
+.rt-inventory-item--equipped:hover {
+    background: rgba(140, 220, 80, 0.10);
+}
+
+/* Inventory section subheader (Gear / Other Items) */
+.rt-inventory-subheader {
+    font-size: 0.72em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--rt-accent, #a0a0a0);
+    opacity: 0.75;
+    padding: 7px 0 3px 0;
+    margin-top: 2px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.rt-inventory-subheader:first-child {
+    padding-top: 1px;
+    margin-top: 0;
+}
+
 /* ── Universal Rendering Tags ── */
 
 /* Objective checkboxes */
