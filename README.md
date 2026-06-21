@@ -78,7 +78,7 @@ Together they solve the four core problems of LLM tabletop RP: the AI forgetting
 1. **Initial Setup:** Use the archetype buttons on the empty tracker to roll a new character, or paste an existing sheet into the "Raw View" (if your sheet doesn't align with what the UI expects, ask the model via 💬 to fix the formatting). Create a character card for your "narrator," such as Simulation Engine that I use. You can also name it something like Game Master.
 2. **Auto-Tracking:** As you roleplay, the extension intelligently parses assistant responses. It detects losses of HP, new loot, or combat triggers, stitching together multi-part tool-call responses and running background passes to update the state.
 3. **Prompt Injection & Execution:** The State Memo and RNG Queue are injected seamlessly into your outgoing prompt to act as the "source of truth." For narrative actions, the framework dynamically catches and resolves the AI's `RollTheDice` tool calls.
-4. **Validation:** Use the Delta Log (δ) to verify changes. If the AI ever makes a mistake, step backwards using the Snapshot Navigation (←/→) to restore a clean state. Not really needed much in my experience, but the option is there.
+4. **World Progression Skeleton & Settings:** Optionally, create a "world skeleton" for the World Progression component to inject broader macroscopic content into the context/world in the world reports. Optionally set up the randomizers from the WP settings to determine how much skeleton and organic (Lorebook Agent) content is used in world updates.
 
 ## Suggested Companions
 
