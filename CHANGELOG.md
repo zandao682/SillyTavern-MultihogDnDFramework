@@ -2,6 +2,16 @@
 
 All notable changes to the **Multihog D&D Framework** will be documented in this file.
 
+## [3.8.1] - 2026-06-23
+
+### Fixed
+- **System Prompts Constraints**:
+  - Removed accidental `RollTheDice` tool call reference from `sysprompt_legacy.txt` (and the fallback copy in `constants.js`) under `<RNG_constraints>`.
+
+### Added
+- **System Prompts Spatial Constraints**:
+  - Added new `<spatial_and_entity_constraints>` sub-block under `<constraints>` in both normal and legacy narrator prompts.
+
 ## [3.8.0] - 2026-06-22
 
 ### Changed
