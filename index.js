@@ -7680,7 +7680,7 @@ function buildSysprompt(rawText) {
 
         // --- Version Upgrade Prompt Reset Dialog ---
         {
-            let currentVersion = '3.7.9'; // Fallback
+            let currentVersion = '3.8.0'; // Fallback
             try {
                 const manifestUrl = new URL('./manifest.json', import.meta.url);
                 const response = await fetch(manifestUrl);
@@ -7692,15 +7692,11 @@ function buildSysprompt(rawText) {
                 console.warn('[RPG Tracker] Could not fetch manifest.json for version check', e);
             }
 
-            const targetLayoutVersion = 2;
-            const needsLayoutReset = !settings.syspromptLayoutVersion || settings.syspromptLayoutVersion < targetLayoutVersion;
-
             if (!settings.lastResetVersion) {
                 // Fresh install - set version silently
                 settings.lastResetVersion = currentVersion;
-                settings.syspromptLayoutVersion = targetLayoutVersion;
                 saveSettings();
-            } else if (settings.lastResetVersion !== currentVersion || needsLayoutReset) {
+            } else if (settings.lastResetVersion !== currentVersion) {
                 if (settings.autoResetPromptsOnUpdate) {
                     // Silently reset everything automatically
                     (async () => {
@@ -7774,7 +7770,6 @@ function buildSysprompt(rawText) {
                         }
 
                         fresh.lastResetVersion = currentVersion;
-                        fresh.syspromptLayoutVersion = targetLayoutVersion;
                         saveSettings();
                         toastr['info'](`Prompts auto-updated to version ${currentVersion} defaults.`, 'RPG Tracker');
                         console.log(`[RPG Tracker] Automatically reset all prompts to defaults for version ${currentVersion}.`);
@@ -7962,7 +7957,6 @@ function buildSysprompt(rawText) {
                                 }
 
                                 fresh.lastResetVersion = currentVersion;
-                                fresh.syspromptLayoutVersion = targetLayoutVersion;
                                 saveSettings();
 
                                 if (resetCount > 0) {
@@ -7972,7 +7966,6 @@ function buildSysprompt(rawText) {
                                 }
                             } else {
                                 fresh.lastResetVersion = currentVersion;
-                                fresh.syspromptLayoutVersion = targetLayoutVersion;
                                 saveSettings();
                                 toastr['info']('Custom prompts kept intact.', 'RPG Tracker');
                             }

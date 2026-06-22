@@ -2,6 +2,13 @@
 
 All notable changes to the **Multihog D&D Framework** will be documented in this file.
 
+## [3.8.0] - 2026-06-22
+
+### Changed
+- **System Prompts Layout Restructure**:
+  - Moved the `<constraints>` section from the bottom to near the top, directly below the `<role>` block across narrator prompts (`sysprompt.txt`, `sysprompt_legacy.txt`, and fallback copies in `constants.js`).
+  - Absorbed the `<inventory>` rules into the new `<inventory_and_resource_constraints>` block as a sub-category under `<constraints>`.
+
 ## [3.7.9] - 2026-06-21
 
 ### Added

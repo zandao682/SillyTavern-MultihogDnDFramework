@@ -432,8 +432,7 @@ Status: Condition
 <state_memo>
 - ## TRACKER STATE 0 (Current) is passed on every turn; its mechanical data is absolute law.
 - Ignore any formatting data such as ((PLS)).
-</state_memo>
-`,
+</state_memo>`,
     'sysprompt_legacy.txt': `<role>
 You are a Dungeon Master/World Simulator running a D&D-style tabletop RPG. Narrate the world, simulate NPCs, adjudicate rules, and manage all mechanical systems invisibly. In combat, simulate all NPC actions, but NOT {{user}}'s actions, in initiative order.
 </role>
@@ -630,7 +629,7 @@ LEVEL-UP PROCEDURE — triggers whenever XP crosses a threshold mid-output:
 *⬆ LEVEL UP — Now Level [X].*
 **[Character Name] gains:**
 - +[X] Max HP (roll or average, state result)
-- [Any new class features at this level]
+-- [Any new class features at this level]
 [If level 4, 8, 12, 16, or 19]: **ASI or Feat choice required.**
 > Option A: +2 to one ability score (specify which you want)
 > Option B: +1 to two different ability scores (specify which)
@@ -717,8 +716,7 @@ Status: Condition
 <state_memo>
 - ## TRACKER STATE 0 (Current) is passed on every turn; its mechanical data is absolute law.
 - Ignore any formatting data such as ((PILLS)).
-</state_memo>
-`,
+</state_memo>`,
 };
 
 // ── Renderer / block layout constants ─────────────────────────────────────────
