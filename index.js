@@ -4780,6 +4780,11 @@ function createPanel() {
                     staleBadge.style.display = 'none';
                     saveBtn.textContent = 'Save';
                     saveBtn.disabled = false;
+                    
+                    if (!entryHdr.parentElement) {
+                        _openEntries.delete(item.id);
+                    }
+                    
                     document.dispatchEvent(new CustomEvent('rt_lore_agent_updated'));
                     await refreshManifest();
                     // @ts-ignore
@@ -4800,8 +4805,16 @@ function createPanel() {
                 keysInp.value = item.keys.join(', ');
                 contentArea.value = item.content || '';
                 syncReadFromItem();
-                readPane.style.display = 'flex';
-                editPane.style.display = 'none';
+                
+                if (!entryHdr.parentElement) {
+                    body.style.display = 'none';
+                    _openEntries.delete(item.id);
+                    const card = body.previousElementSibling;
+                    if (card && card.classList.contains('rt-npc-card')) card.classList.remove('open');
+                } else {
+                    readPane.style.display = 'flex';
+                    editPane.style.display = 'none';
+                }
             });
 
             if (delBtn) {
@@ -5621,12 +5634,26 @@ function createPanel() {
         const createNpcFromCharCard = async (charCard, bookName, adaptedContent = null) => {
             const ctx = SillyTavern.getContext();
             const s = getSettings();
-            const name = charCard.name || 'Unnamed NPC';
+            let name = charCard.name || 'Unnamed NPC';
+            let keys = [name];
+            
+            const firstName = name.split(/\s+/)[0];
+            if (firstName && firstName !== name) keys.push(firstName);
 
             // Build NPC entry content
             let content;
             if (adaptedContent) {
                 content = adaptedContent;
+                // Parse the [[NPC: Name | Description | Keywords]] format if AI provided it
+                const match = content.match(/^\[\[NPC:\s*(.*?)\s*\|\s*([\s\S]*?)\s*\|\s*(.*?)\]\]$/i);
+                if (match) {
+                    name = match[1].trim();
+                    content = match[2].trim();
+                    const extractedKeys = match[3].split(',').map(k => k.trim()).filter(Boolean);
+                    if (extractedKeys.length > 0) {
+                        keys = extractedKeys;
+                    }
+                }
             } else {
                 // Direct add: use name, description, personality (NOT scenario/first_mes)
                 const parts = [];
@@ -5643,12 +5670,6 @@ function createPanel() {
             if (s.npcRelationshipBars && adaptedContent && !/Friendship\/Rapport:/i.test(content)) {
                 content += '\nFriendship/Rapport: 0/100\nAffection/Interest: 0/100';
             }
-
-
-            const keys = [name];
-            // Add first name as keyword too
-            const firstName = name.split(/\s+/)[0];
-            if (firstName && firstName !== name) keys.push(firstName);
 
             // Load or create the book
             let bookData = null;
@@ -5765,7 +5786,7 @@ function createPanel() {
             const contextParts = [];
 
             // Character card data
-            contextParts.push(`CHARACTER CARD:\nName: ${name}\nDescription: ${(charCard.description || '').substring(0, 2000)}\nPersonality: ${(charCard.personality || '').substring(0, 500)}\nScenario: ${(charCard.scenario || '').substring(0, 500)}\nFirst Message: ${(charCard.first_mes || '').substring(0, 500)}`);
+            contextParts.push(`CHARACTER CARD:\nName: ${name}\nDescription: ${(charCard.description || '').substring(0, 2000)}\nPersonality: ${(charCard.personality || '').substring(0, 500)}`);
 
             // Current game state
             if (s.currentMemo) {
@@ -5820,8 +5841,12 @@ Rules:
 - If the character is from a different era/genre (e.g., modern character in a medieval fantasy), translate their skills, equipment, backstory, and background to fit the current world setting.
 - Preserve the character's core personality, motivations, and distinguishing traits.
 - Write a concise NPC lorebook entry following the exact <npc_instructions> provided above.
-- Make sure to format the entry EXACTLY according to the NPC instructions, using the exact section names and structure required.
-- Output ONLY the adapted NPC entry content. No preamble, no explanation, no tags.`;
+- Your output MUST be strictly formatted as a lorebook entry tag. It MUST look EXACTLY like this:
+  [[NPC: Name | Description | keywords]]
+- Replace "Name" with the character's name.
+- Replace "Description" with the full formatted description section.
+- Replace "keywords" with a comma-separated list of keywords including their name.
+- Output ONLY this single [[NPC: ...]] string. No preamble, no explanation, no other tags.`;
 
             const userPrompt = contextParts.join('\n\n---\n\n');
 
