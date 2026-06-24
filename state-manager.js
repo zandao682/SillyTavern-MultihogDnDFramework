@@ -21,34 +21,29 @@ export const MODULE_NAME = 'rpg_tracker';
  * @returns {string}
  */
 export function buildNpcInstruction(majorTokens = 125, minorTokens = 100) {
-    let instruction = 'Named characters the party interacts with. Do NOT create an entry for {{user}}. Mention {{user}} in EVENT or QUEST entries as needed.\
-\
-\
-IMPORTANT: Wrap the immutable identity sections (Appearance, Personality, Brief Background, Habits/Behaviors) inside a single `[CORE]` and `[/CORE]` tag block. The Description field inside the [[ ]] tags must contain this block. These sections are permanent — once written they must NOT be rewritten, overwritten, or updated through normal entry update/record operations.\
-\
-\
-[CORE]\
-Appearance: Key visual identifiers only — race, build, most distinctive feature, weapon/armor if relevant.\
-Personality: Core temperament and primary motivation in a few words.\
-Brief Background: Role in the world, why they matter to the story.\
-Habits/Behaviors: One or two defining behaviors or combat tendencies.\
-[/CORE]\
-\
-\
-After the [/CORE] block, append timestamped narrative updates as usual ([Day X, HH:MM] ...).\
-\
-\
-## APPEARANCE UPDATES\
-If the NPC\'s physical appearance changes significantly (major injury, permanent outfit change, etc.), output:\
-  [[UPDATE_APPEARANCE: Book::UID | New appearance text]]\
-This surgically replaces only the Appearance field inside [CORE]. Do NOT write appearance changes as event/update entries.\
-\
-\
-## RELATIONSHIP DELTAS\
-If the NPC\'s relationship with the player meaningfully changes based on what happened, output:\
-  [[REL: Book::UID | Friendship | +N]] or [[REL: Book::UID | Friendship | -N]]\
-  [[REL: Book::UID | Affection | +N]] or [[REL: Book::UID | Affection | -N]]\
-Output only the delta — do NOT write or track the relationship total. The current total is intentionally hidden from you so your judgment stays anchored to the quality of the interaction, not the existing pool. A constraint warning will appear in the entry only if a value has reached its hard limit (100 or -100); in that case, do not award further increments in the capped direction. Use your judgment on magnitude (typical range: ±5 to ±25 per turn).';
+    let instruction = `Named characters the party interacts with. Do NOT create an entry for {{user}}. Mention {{user}} in EVENT or QUEST entries as needed.
+
+IMPORTANT: Wrap the immutable identity sections (Appearance, Personality, Brief Background, Habits/Behaviors) inside a single \`[CORE]\` and \`[/CORE]\` tag block. The Description field inside the [[ ]] tags must contain this block. These sections are permanent — once written they must NOT be rewritten, overwritten, or updated through normal entry update/record operations.
+
+[CORE]
+Appearance: Key visual identifiers only — race, build, most distinctive feature, weapon/armor if relevant.
+Personality: Core temperament and primary motivation in a few words.
+Brief Background: Role in the world, why they matter to the story.
+Habits/Behaviors: One or two defining behaviors or combat tendencies.
+[/CORE]
+
+After the [/CORE] block, append timestamped narrative updates as usual ([Day X, HH:MM] ...).
+
+## APPEARANCE UPDATES
+If the NPC's physical appearance changes significantly (major injury, permanent outfit change, etc.), output:
+  [[UPDATE_APPEARANCE: Book::UID | New appearance text]]
+This surgically replaces only the Appearance field inside [CORE]. Do NOT write appearance changes as event/update entries.
+
+## RELATIONSHIP DELTAS
+If the NPC's relationship with the player meaningfully changes based on what happened, output:
+  [[REL: Book::UID | Friendship | +N]] or [[REL: Book::UID | Friendship | -N]]
+  [[REL: Book::UID | Affection | +N]] or [[REL: Book::UID | Affection | -N]]
+Output only the delta — do NOT write or track the relationship total. The current total is intentionally hidden from you so your judgment stays anchored to the quality of the interaction, not the existing pool. A constraint warning will appear in the entry only if a value has reached its hard limit (100 or -100); in that case, do not award further increments in the capped direction. Use your judgment on magnitude (typical range: ±5 to ±25 per turn).`;
 
     instruction += `\n\nBe concise and functional — every word should serve gameplay or characterization. Avoid adjective dumps and purple prose.\n\n[TOKEN LIMITS]\nMajor NPCs (recurring, plot-important): no more than ${majorTokens} tokens.\nMinor NPCs (shopkeepers, guards, one-off encounters): no more than ${minorTokens} tokens — use only Appearance and Personality for minor NPCs (also wrapped in [CORE]...[/CORE]), skip other sections.`;
     return instruction;
@@ -446,6 +441,7 @@ Example: [[FAC: Iron Syndicate | ...]]  NOT  [[FAC: Khelt :: Iron Syndicate | ..
         worldOpenaiModel: "",
         lastResetVersion: "",
         autoResetPromptsOnUpdate: false,
+        userPromptSuffix: '## OUTPUT ONLY CHANGED SECTIONS:',
     };
 
     if (!extensionSettings[MODULE_NAME]) {

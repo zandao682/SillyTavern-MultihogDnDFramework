@@ -2111,26 +2111,12 @@ async function runStateModelPass(narrativeOutput, isFullContext = false, overrid
                     `## NARRATIVE HISTORY (Chunk ${i + 1} of ${chunks.length})\n${chatLog}\n\n` +
                     `## TASK\nAnalyze the narrative chunk provided above. Rebuild the State Memo to ensure every detail is perfectly accurate to this point in the story. Correct any errors or omissions found in the Prior Memo.\n\n` +
                     `## OUTPUT THE COMPLETE VERIFIED STATE MEMO:`;
-            } else if (useFullReview) {
-                // AGGRESSIVE Full Review Mode: forceful mandatory full state reconstruction
-                userPrompt =
-                    worldLoreSection +
-                    priorMemoText +
-                    `## NARRATIVE HISTORY (Last ${chunks[i].length} messages)\n${chatLog}\n\n` +
-                    `## MANDATORY FULL STATE RECONSTRUCTION — OUTPUT EVERY SECTION NOW:`;
-            } else if (useHalfReview) {
-                // Half Review Mode: ask the model to review and output the entire state (medium intensity)
-                userPrompt =
-                    worldLoreSection +
-                    priorMemoText +
-                    `## NARRATIVE HISTORY (Last ${chunks[i].length} messages)\n${chatLog}\n\n` +
-                    `## REVIEW AND OUTPUT THE COMPLETE UPDATED STATE:`;
             } else {
                 userPrompt =
                     worldLoreSection +
                     priorMemoText +
                     `## NARRATIVE HISTORY (Last ${chunks[i].length} messages)\n${chatLog}\n\n` +
-                    `## OUTPUT ONLY CHANGED SECTIONS:`;
+                    (settings.userPromptSuffix || `## OUTPUT ONLY CHANGED SECTIONS:`);
             }
 
             const result = await sendStateRequest(settings, systemPrompt, userPrompt);
@@ -6320,11 +6306,11 @@ Rules:
                     saveSettings();
                 }));
 
-                const inst = document.createElement('input');
-                inst.type = 'text';
+                const inst = document.createElement('textarea');
                 inst.value = config.instruction || '';
+                inst.rows = 2;
                 inst.title = 'Instruction text — guidance about what to write in each slot';
-                inst.style.cssText = 'width:100%; background:rgba(0,0,0,0.3); color:var(--rt-text); border:1px solid rgba(255,255,255,0.1); border-radius:3px; font-size:0.692em; padding:2px 4px; box-sizing:border-box; margin-top:2px;';
+                inst.style.cssText = 'width:100%; background:rgba(0,0,0,0.3); color:var(--rt-text); border:1px solid rgba(255,255,255,0.1); border-radius:3px; font-size:0.692em; padding:2px 4px; box-sizing:border-box; margin-top:2px; resize:vertical !important; min-height:38px; font-family:inherit;';
                 inst.addEventListener('change', () => {
                     const st = getSettings();
                     st.routerModules[id].instruction = inst.value;
@@ -6386,12 +6372,12 @@ Rules:
                     saveSettings();
                 }));
 
-                const inst = document.createElement('input');
-                inst.type = 'text';
+                const inst = document.createElement('textarea');
                 inst.value = tag.instruction || '';
+                inst.rows = 2;
                 inst.placeholder = 'Instructions for this tag...';
                 inst.title = 'Instruction text — guidance about what to write in each slot';
-                inst.style.cssText = 'width:100%; background:rgba(0,0,0,0.3); color:var(--rt-text); border:1px solid rgba(255,255,255,0.1); border-radius:3px; font-size:0.692em; padding:2px 4px; box-sizing:border-box; margin-top:2px;';
+                inst.style.cssText = 'width:100%; background:rgba(0,0,0,0.3); color:var(--rt-text); border:1px solid rgba(255,255,255,0.1); border-radius:3px; font-size:0.692em; padding:2px 4px; box-sizing:border-box; margin-top:2px; resize:vertical !important; min-height:38px; font-family:inherit;';
                 inst.addEventListener('change', () => {
                     const st = getSettings();
                     st.routerCustomTags[idx].instruction = inst.value;
@@ -8713,12 +8699,17 @@ function buildSysprompt(rawText) {
                         // 2. State Tracker
                         if (extensionSettings[MODULE_NAME]) {
                             delete extensionSettings[MODULE_NAME].systemPromptTemplate;
+                            delete extensionSettings[MODULE_NAME].userPromptSuffix;
                         }
                         const sTempTracker = getSettings();
                         sTempTracker.stockPrompts = JSON.parse(JSON.stringify(DEFAULT_STOCK_PROMPTS));
                         const $corePromptEl = $('#rpg_tracker_core_prompt');
                         if ($corePromptEl.length) {
                             $corePromptEl.val(sTempTracker.systemPromptTemplate);
+                        }
+                        const $suffixPromptEl = $('#rpg_tracker_user_prompt_suffix');
+                        if ($suffixPromptEl.length) {
+                            $suffixPromptEl.val(sTempTracker.userPromptSuffix);
                         }
                         if (typeof refreshOrderList === 'function') refreshOrderList();
 
@@ -8890,12 +8881,17 @@ function buildSysprompt(rawText) {
                                 if (trackerReset) {
                                     if (extensionSettings[MODULE_NAME]) {
                                         delete extensionSettings[MODULE_NAME].systemPromptTemplate;
+                                        delete extensionSettings[MODULE_NAME].userPromptSuffix;
                                     }
                                     const sTempTracker = getSettings();
                                     sTempTracker.stockPrompts = JSON.parse(JSON.stringify(DEFAULT_STOCK_PROMPTS));
                                     const $corePromptEl = $('#rpg_tracker_core_prompt');
                                     if ($corePromptEl.length) {
                                         $corePromptEl.val(sTempTracker.systemPromptTemplate);
+                                    }
+                                    const $suffixPromptEl = $('#rpg_tracker_user_prompt_suffix');
+                                    if ($suffixPromptEl.length) {
+                                        $suffixPromptEl.val(sTempTracker.userPromptSuffix);
                                     }
                                     if (typeof refreshOrderList === 'function') refreshOrderList();
                                     resetCount++;
@@ -10238,15 +10234,22 @@ RULES:
             saveSettings();
         });
 
+        $('#rpg_tracker_user_prompt_suffix').val(settings.userPromptSuffix || '').on('input', function () {
+            settings.userPromptSuffix = $(this).val();
+            saveSettings();
+        });
+
         $('#rpg_tracker_btn_reset_prompt').on('click', function () {
-            if (!confirm('Reset the State Model prompt to the built-in default?')) return;
+            if (!confirm('Reset the State Model prompt and user prompt suffix to the built-in defaults?')) return;
             // Re-read the default from the defaults object by temporarily clearing the stored value
             const { extensionSettings } = SillyTavern.getContext();
             delete extensionSettings[MODULE_NAME].systemPromptTemplate;
+            delete extensionSettings[MODULE_NAME].userPromptSuffix;
             const freshSettings = getSettings(); // re-merges defaults
             $('#rpg_tracker_core_prompt').val(freshSettings.systemPromptTemplate);
+            $('#rpg_tracker_user_prompt_suffix').val(freshSettings.userPromptSuffix);
             saveSettings();
-            toastr['success']('Core prompt reset to default.', 'RPG Tracker');
+            toastr['success']('Core prompt and user prompt suffix reset to defaults.', 'RPG Tracker');
         });
 
         $('#rpg_tracker_btn_reset_all_prompts').on('click', function () {
@@ -10764,10 +10767,12 @@ RULES:
 
             const { extensionSettings } = SillyTavern.getContext();
 
-            // 1. Reset Core prompt
+            // 1. Reset Core prompt and user prompt suffix
             delete extensionSettings[MODULE_NAME].systemPromptTemplate;
+            delete extensionSettings[MODULE_NAME].userPromptSuffix;
             const freshSettings = getSettings();
             $('#rpg_tracker_core_prompt').val(freshSettings.systemPromptTemplate);
+            $('#rpg_tracker_user_prompt_suffix').val(freshSettings.userPromptSuffix);
 
             // 2. Reset stock modules, order, active modules
             delete extensionSettings[MODULE_NAME].stockPrompts;
