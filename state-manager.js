@@ -44,8 +44,12 @@ If the NPC's relationship with the player meaningfully changes based on what hap
   [[REL: Book::UID | Friendship | +N]] or [[REL: Book::UID | Friendship | -N]]
   [[REL: Book::UID | Affection | +N]] or [[REL: Book::UID | Affection | -N]]
 Output only the delta — do NOT write or track the relationship total. The current total is intentionally hidden from you so your judgment stays anchored to the quality of the interaction, not the existing pool. A constraint warning will appear in the entry only if a value has reached its hard limit (100 or -100); in that case, do not award further increments in the capped direction. Use your judgment on magnitude (typical range: ±5 to ±25 per turn).`;
+    instruction += `\n\nBe concise and functional — every word should serve gameplay or characterization. Avoid adjective dumps and purple prose.
 
-    instruction += `\n\nBe concise and functional — every word should serve gameplay or characterization. Avoid adjective dumps and purple prose.\n\n[WORD LIMITS]\nMajor NPCs (recurring, plot-important): no more than ${majorWords} words.\nMinor NPCs (shopkeepers, guards, one-off encounters): no more than ${minorWords} words — use only Appearance and Personality for minor NPCs (also wrapped in [CORE]...[/CORE]), skip other sections.`;
+[WORD BUDGET TARGETS]
+You MUST explicitly target these word counts for the [CORE] block. Write concise, high-density sentences and trim ruthlessly to stay under budget:
+- Major NPCs (recurring, plot-important): Target exactly ${majorWords} words.
+- Minor NPCs (shopkeepers, guards, one-off encounters): Target exactly ${minorWords} words — use only Appearance and Personality for minor NPCs (also wrapped in [CORE]...[/CORE]), skip other sections.`;
     return instruction;
 }
 
