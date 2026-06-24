@@ -4849,17 +4849,17 @@ function createPanel() {
                                     <div style="font-size:16px;font-weight:bold;color:#d4a940;margin-bottom:16px;">⚙️ NPC Settings</div>
 
                                     <div style="margin-bottom:14px;">
-                                        <label style="font-size:12px;color:rgba(255,255,255,0.7);display:block;margin-bottom:4px;">Major NPC Token Limit</label>
-                                        <input type="number" id="rt-npc-major-tokens" value="${curS.npcMajorTokens ?? 125}" min="50" max="1000" step="25"
+                                        <label style="font-size:12px;color:rgba(255,255,255,0.7);display:block;margin-bottom:4px;">Major NPC Word Limit</label>
+                                        <input type="number" id="rt-npc-major-words" value="${curS.npcMajorWords ?? 90}" min="20" max="500" step="10"
                                             style="width:100%;background:rgba(0,0,0,0.4);color:white;border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:6px 10px;font-size:13px;box-sizing:border-box;">
-                                        <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;">Recurring, plot-important NPCs. Default: 125</div>
+                                        <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;">Recurring, plot-important NPCs. Default: 90 words</div>
                                     </div>
 
                                     <div style="margin-bottom:14px;">
-                                        <label style="font-size:12px;color:rgba(255,255,255,0.7);display:block;margin-bottom:4px;">Minor NPC Token Limit</label>
-                                        <input type="number" id="rt-npc-minor-tokens" value="${curS.npcMinorTokens ?? 100}" min="30" max="500" step="10"
+                                        <label style="font-size:12px;color:rgba(255,255,255,0.7);display:block;margin-bottom:4px;">Minor NPC Word Limit</label>
+                                        <input type="number" id="rt-npc-minor-words" value="${curS.npcMinorWords ?? 60}" min="10" max="200" step="10"
                                             style="width:100%;background:rgba(0,0,0,0.4);color:white;border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:6px 10px;font-size:13px;box-sizing:border-box;">
-                                        <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;">Shopkeepers, guards, one-off encounters. Default: 100</div>
+                                        <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;">Shopkeepers, guards, one-off encounters. Default: 60 words</div>
                                     </div>
 
                                     <div style="margin-bottom:6px;display:flex;align-items:center;gap:10px;">
@@ -4883,8 +4883,8 @@ function createPanel() {
                                     <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:10px;">Shows the "Add NPC from Character Card" button. This allows importing character cards into campaigns with AI review to fit them into the story. However, organic NPC creation is recommended.</div>
                                 </div>`;
 
-                                let newMajor = curS.npcMajorTokens ?? 125;
-                                let newMinor = curS.npcMinorTokens ?? 100;
+                                let newMajor = curS.npcMajorWords ?? 90;
+                                let newMinor = curS.npcMinorWords ?? 60;
                                 let newRel = curS.npcRelationshipBars ?? false;
                                 let newImport = curS.experimentalNpcImport ?? false;
 
@@ -4894,8 +4894,8 @@ function createPanel() {
                                     const relEl = document.getElementById('rt-npc-rel-bars');
                                     const importEl = document.getElementById('rt-npc-card-import');
 
-                                    if (majorEl) majorEl.addEventListener('input', () => newMajor = parseInt(majorEl.value, 10) || 125);
-                                    if (minorEl) minorEl.addEventListener('input', () => newMinor = parseInt(minorEl.value, 10) || 100);
+                                    if (majorEl) majorEl.addEventListener('input', () => newMajor = parseInt(majorEl.value, 10) || 90);
+                                    if (minorEl) minorEl.addEventListener('input', () => newMinor = parseInt(minorEl.value, 10) || 60);
                                     if (relEl) {
                                         relEl.addEventListener('change', () => {
                                             newRel = relEl.checked;
@@ -4915,18 +4915,18 @@ function createPanel() {
                                 });
 
                                 if (result) {
-                                    newMajor = Math.max(50, Math.min(1000, newMajor));
-                                    newMinor = Math.max(30, Math.min(500, newMinor));
+                                    newMajor = Math.max(20, Math.min(500, newMajor));
+                                    newMinor = Math.max(10, Math.min(200, newMinor));
 
                                     const updS = getSettings();
                                     updS.experimentalNpcImport = newImport;
-                                    updS.npcMajorTokens = newMajor;
-                                    updS.npcMinorTokens = newMinor;
+                                    updS.npcMajorWords = newMajor;
+                                    updS.npcMinorWords = newMinor;
                                     updS.npcRelationshipBars = newRel;
 
                                     // Update the main settings panel inputs if present
-                                    $('#rpg_tracker_npc_major_tokens').val(newMajor);
-                                    $('#rpg_tracker_npc_minor_tokens').val(newMinor);
+                                    $('#rpg_tracker_npc_major_words').val(newMajor);
+                                    $('#rpg_tracker_npc_minor_words').val(newMinor);
                                     $('#rpg_tracker_npc_rel_bars').prop('checked', newRel);
                                     $('#rpg_tracker_npc_card_import').prop('checked', newImport);
 
@@ -8717,8 +8717,8 @@ function buildSysprompt(rawText) {
                         if ($suffixPromptEl.length) {
                             $suffixPromptEl.val(sTempTracker.userPromptSuffix);
                         }
-                        $('#rpg_tracker_npc_major_tokens').val(sTempTracker.npcMajorTokens ?? 125);
-                        $('#rpg_tracker_npc_minor_tokens').val(sTempTracker.npcMinorTokens ?? 100);
+                        $('#rpg_tracker_npc_major_words').val(sTempTracker.npcMajorWords ?? 90);
+                        $('#rpg_tracker_npc_minor_words').val(sTempTracker.npcMinorWords ?? 60);
                         $('#rpg_tracker_npc_rel_bars').prop('checked', !!sTempTracker.npcRelationshipBars);
                         $('#rpg_tracker_npc_card_import').prop('checked', !!sTempTracker.experimentalNpcImport);
                         if (typeof refreshOrderList === 'function') refreshOrderList();
@@ -8903,8 +8903,8 @@ function buildSysprompt(rawText) {
                                     if ($suffixPromptEl.length) {
                                         $suffixPromptEl.val(sTempTracker.userPromptSuffix);
                                     }
-                                    $('#rpg_tracker_npc_major_tokens').val(sTempTracker.npcMajorTokens ?? 125);
-                                    $('#rpg_tracker_npc_minor_tokens').val(sTempTracker.npcMinorTokens ?? 100);
+                                    $('#rpg_tracker_npc_major_words').val(sTempTracker.npcMajorWords ?? 90);
+                                    $('#rpg_tracker_npc_minor_words').val(sTempTracker.npcMinorWords ?? 60);
                                     $('#rpg_tracker_npc_rel_bars').prop('checked', !!sTempTracker.npcRelationshipBars);
                                     $('#rpg_tracker_npc_card_import').prop('checked', !!sTempTracker.experimentalNpcImport);
                                     if (typeof refreshOrderList === 'function') refreshOrderList();
@@ -11485,19 +11485,19 @@ RULES:
         });
 
         // NPC Settings Bindings
-        $('#rpg_tracker_npc_major_tokens').val(settings.npcMajorTokens ?? 125).on('input', function () {
-            const val = parseInt(String($(this).val() || '')) || 125;
-            settings.npcMajorTokens = Math.max(50, Math.min(1000, val));
+        $('#rpg_tracker_npc_major_words').val(settings.npcMajorWords ?? 90).on('input', function () {
+            const val = parseInt(String($(this).val() || '')) || 90;
+            settings.npcMajorWords = Math.max(20, Math.min(500, val));
             if (settings.routerModules?.npc) {
-                settings.routerModules.npc.instruction = buildNpcInstruction(settings.npcMajorTokens, settings.npcMinorTokens);
+                settings.routerModules.npc.instruction = buildNpcInstruction(settings.npcMajorWords, settings.npcMinorWords);
             }
             saveSettings();
         });
-        $('#rpg_tracker_npc_minor_tokens').val(settings.npcMinorTokens ?? 100).on('input', function () {
-            const val = parseInt(String($(this).val() || '')) || 100;
-            settings.npcMinorTokens = Math.max(30, Math.min(500, val));
+        $('#rpg_tracker_npc_minor_words').val(settings.npcMinorWords ?? 60).on('input', function () {
+            const val = parseInt(String($(this).val() || '')) || 60;
+            settings.npcMinorWords = Math.max(10, Math.min(300, val));
             if (settings.routerModules?.npc) {
-                settings.routerModules.npc.instruction = buildNpcInstruction(settings.npcMajorTokens, settings.npcMinorTokens);
+                settings.routerModules.npc.instruction = buildNpcInstruction(settings.npcMajorWords, settings.npcMinorWords);
             }
             saveSettings();
         });

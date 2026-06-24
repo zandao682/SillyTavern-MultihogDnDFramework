@@ -16,11 +16,11 @@ export const MODULE_NAME = 'rpg_tracker';
 
 /**
  * Builds the NPC instruction string based on current NPC settings.
- * @param {number} majorTokens
- * @param {number} minorTokens
+ * @param {number} majorWords
+ * @param {number} minorWords
  * @returns {string}
  */
-export function buildNpcInstruction(majorTokens = 125, minorTokens = 100) {
+export function buildNpcInstruction(majorWords = 90, minorWords = 60) {
     let instruction = `Named characters the party interacts with. Do NOT create an entry for {{user}}. Mention {{user}} in EVENT or QUEST entries as needed.
 
 IMPORTANT: Wrap the immutable identity sections (Appearance, Personality, Brief Background, Habits/Behaviors) inside a single \`[CORE]\` and \`[/CORE]\` tag block. The Description field inside the [[ ]] tags must contain this block. These sections are permanent — once written they must NOT be rewritten, overwritten, or updated through normal entry update/record operations.
@@ -45,7 +45,7 @@ If the NPC's relationship with the player meaningfully changes based on what hap
   [[REL: Book::UID | Affection | +N]] or [[REL: Book::UID | Affection | -N]]
 Output only the delta — do NOT write or track the relationship total. The current total is intentionally hidden from you so your judgment stays anchored to the quality of the interaction, not the existing pool. A constraint warning will appear in the entry only if a value has reached its hard limit (100 or -100); in that case, do not award further increments in the capped direction. Use your judgment on magnitude (typical range: ±5 to ±25 per turn).`;
 
-    instruction += `\n\nBe concise and functional — every word should serve gameplay or characterization. Avoid adjective dumps and purple prose.\n\n[TOKEN LIMITS]\nMajor NPCs (recurring, plot-important): no more than ${majorTokens} tokens.\nMinor NPCs (shopkeepers, guards, one-off encounters): no more than ${minorTokens} tokens — use only Appearance and Personality for minor NPCs (also wrapped in [CORE]...[/CORE]), skip other sections.`;
+    instruction += `\n\nBe concise and functional — every word should serve gameplay or characterization. Avoid adjective dumps and purple prose.\n\n[WORD LIMITS]\nMajor NPCs (recurring, plot-important): no more than ${majorWords} words.\nMinor NPCs (shopkeepers, guards, one-off encounters): no more than ${minorWords} words — use only Appearance and Personality for minor NPCs (also wrapped in [CORE]...[/CORE]), skip other sections.`;
     return instruction;
 }
 
@@ -102,8 +102,8 @@ export function getSettings() {
         pollinationsModel: "zimage",
         inventoryWorthMode: "hover",   // 'hover' = worth shown as tooltip only | 'display' = coin badge shown inline
         showTotalInventoryValue: true,
-        npcMajorTokens: 125,
-        npcMinorTokens: 100,
+        npcMajorWords: 90,
+        npcMinorWords: 60,
         npcRelationshipBars: false,
         npcRelationshipValues: {},
         experimentalNpcImport: true,
@@ -593,6 +593,22 @@ Example: [[FAC: Iron Syndicate | ...]]  NOT  [[FAC: Khelt :: Iron Syndicate | ..
             );
         }
         s.settingsVersion = '3.11.0';
+    }
+
+    // Migrate NPC limits from tokens to words (v3.12.0)
+    if (!s.settingsVersion || s.settingsVersion < '3.12.0') {
+        // Convert old token keys to word keys using approximate conversion (125t→90w, 100t→60w)
+        if (s.npcMajorWords === undefined) {
+            s.npcMajorWords = s.npcMajorTokens !== undefined ? Math.round(s.npcMajorTokens * 0.72) : 90;
+        }
+        if (s.npcMinorWords === undefined) {
+            s.npcMinorWords = s.npcMinorTokens !== undefined ? Math.round(s.npcMinorTokens * 0.72) : 60;
+        }
+        // Rebuild instruction with word-based limits
+        if (s.routerModules?.npc) {
+            s.routerModules.npc.instruction = buildNpcInstruction(s.npcMajorWords, s.npcMinorWords);
+        }
+        s.settingsVersion = '3.12.0';
     }
 
 
