@@ -2,6 +2,13 @@
 
 All notable changes to the **Multihog D&D Framework** will be documented in this file.
 
+## [3.8.6] - 2026-06-24
+
+### Changed
+- **Sysprompt Reset Button Relocation**:
+  - Moved the **Reset All & Apply** button from under the **Narrator Configuration** block to be positioned directly above the **FACTORY RESET** button at the bottom of the **General & Visuals** sub-drawer.
+  - Made the general **Apply Sysprompt** button under the **Narrator Configuration** block full-width.
+
 ## [3.8.5] - 2026-06-24
 
 ### Removed
