@@ -2,6 +2,12 @@
 
 All notable changes to the **Multihog D&D Framework** will be documented in this file.
 
+## [3.11.3] - 2026-06-24
+
+### Changed
+- **Sync with Main (3.8.10)**:
+  - Integrated settings drawer restructuring, library reset button, automated prompt application on toggle, and experimental features removal.
+
 ## [3.11.2] - 2026-06-24
 
 ### Fixed
@@ -35,6 +41,69 @@ NPCs V2.
 
 **AI Portrait Generation**: High-quality AI portrait generation is now seamlessly integrated! Instantly generate visual representations of your NPCs and characters to bring your campaign to life.
 
+## [3.8.10] - 2026-06-24
+
+### Removed
+- **Outdated Description**:
+  - Removed outdated description text in the **Sysprompt Editor** drawer.
+
+## [3.8.9] - 2026-06-24
+
+### Added
+- **Library Reset Button**:
+  - Added a red reset button (`#rpg_tracker_btn_reset_sysprompt_library`) inside the **Sysprompt Editor** drawer, placed side-by-side with the Custom Sysprompt Library button. This button disables all custom sections in the library and immediately auto-applies the default system prompt template based on active settings.
+
+## [3.8.8] - 2026-06-24
+
+### Removed
+- **Apply Sysprompt Button**:
+  - Removed the **Apply Sysprompt** button from the main settings (General & Visuals) as well, completely removing manual sysprompt application buttons from the extension UI.
+
+### Changed
+- **Auto-Apply on Custom Sysprompt Toggle**:
+  - Configured the **Custom Sysprompt Mode** checkbox to immediately re-apply the correct system prompt according to active settings when it is unchecked.
+
+## [3.8.7] - 2026-06-24
+
+### Removed
+- **Sysprompt Editor Button**:
+  - Removed the duplicate **Apply Sysprompt** button from the **Sysprompt Editor** (SUB-DRAWER 5) completely, leaving it solely under the **Narrator Configuration** block in **General & Visuals**.
+  - Renamed the drawer from **Sysprompt Editor & Reset** to **Sysprompt Editor** to reflect the button removals.
+
+## [3.8.6] - 2026-06-24
+
+### Changed
+- **Sysprompt Reset Button Relocation**:
+  - Moved the **Reset All & Apply** button from under the **Narrator Configuration** block to be positioned directly above the **FACTORY RESET** button at the bottom of the **General & Visuals** sub-drawer.
+  - Made the general **Apply Sysprompt** button under the **Narrator Configuration** block full-width.
+
+## [3.8.5] - 2026-06-24
+
+### Removed
+- **Experimental Features**:
+  - Completely stripped the **Experimental Features** sub-drawer from settings.html.
+  - Removed all corresponding Javascript logic, default options, and UI bindings for **Half Review Mode** and **Full Review Mode**.
+
+## [3.8.4] - 2026-06-24
+
+### Changed
+- **Sysprompt Button Relocations**:
+  - Relocated the **Reset All & Apply** button out of the "Sysprompt Editor & Reset" drawer (SUB-DRAWER 5) and into "General & Visuals" (SUB-DRAWER 1), side-by-side with a duplicate **Apply Sysprompt** button below the Narrator Configuration system prompt builder block.
+  - Renamed the SUB-DRAWER 5 section header to "Apply Sysprompt" to match its updated content.
+
+## [3.8.3] - 2026-06-24
+
+### Changed
+- **Sysprompt Settings Drawer Restructure**:
+  - Renamed the drawer to "Sysprompt Editor & Reset".
+  - Moved the AI-Assisted Section Builder and Custom Sysprompt Library sections to the top of the drawer.
+  - Consolidated the Normal and Legacy update buttons into a single "Apply Sysprompt" button that dynamically chooses between `sysprompt.txt` and `sysprompt_legacy.txt` based on the user's active RNG settings.
+
+## [3.8.2] - 2026-06-24
+
+### Fixed
+- **System Prompts Constraints**:
+  - Removed `[RNG_QUEUE v6.0_PROPER] is ONLY used in active combat` constraint from `sysprompt_legacy.txt` and its fallback copy in `constants.js` under `<RNG_constraints>`.
 ## [3.8.1] - 2026-06-23
 
 ### Fixed

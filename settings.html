@@ -195,6 +195,7 @@
 
                         </div>
 
+
                         <label class="checkbox_label">
                             <input id="rpg_tracker_legacy_dice" type="checkbox" />
                             <span>Legacy Dice Logic (Vanilla)</span>
@@ -254,6 +255,11 @@
                             <span>Auto-Update Prompts on Upgrade</span>
                             <i class="fa-solid fa-circle-question interactable" title="When enabled, all prompts will be automatically reset/updated to defaults when a new framework version is loaded, without prompting."></i>
                         </label>
+                        <button id="rpg_tracker_btn_reset_and_apply_sysprompt" class="menu_button interactable"
+                            style="width: 100%; margin-top: 6px; background: rgba(80, 140, 255, 0.18); border-color: #5588ff;"
+                            title="Resets ALL prompts (Core, Stock Modules, Block Order) and writes the current system prompt template to Quick Prompt Main box.">
+                            <i class="fa-solid fa-rotate"></i> Reset All &amp; Apply
+                        </button>
                         <button id="rpg_tracker_btn_factory_reset" class="menu_button interactable" style="background: rgba(181, 31, 31, 0.4); border-color: #ff5555; width: 100%;"><i class="fa-solid fa-radiation"></i> FACTORY RESET</button>
                     </div>
                 </div>
@@ -969,39 +975,16 @@
 
             
 
-            <!-- SUB-DRAWER 5: SYSPROMPT EDITOR & UPDATER -->
+            <!-- SUB-DRAWER 5: SYSPROMPT EDITOR & RESET -->
             <div class="inline-drawer">
                 <div class="inline-drawer-toggle inline-drawer-header">
                     <i class="fa-solid fa-file-pen" style="margin-right: 8px; opacity: 0.7;"></i>
-                    <b>Sysprompt Editor & Updater</b>
+                    <b>Sysprompt Editor</b>
                     <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
                 </div>
                 <div class="inline-drawer-content">
                     <div class="flex-container flexFlowColumn gap-1">
-                        <div style="font-size: 0.8em; opacity: 0.65; line-height: 1.4; margin-bottom: 8px;">
-                            Manage your D&amp;D system prompt. Update it to the latest version, switch between Normal and Legacy modes, or use AI to add new sections.
-                        </div>
 
-                        <div style="font-weight: bold; font-size: 0.85em; opacity: 0.8; margin-bottom: 4px;">Update Sysprompt</div>
-                        <div style="display: flex; gap: 6px;">
-                            <button id="rpg_tracker_btn_update_sysprompt" class="menu_button interactable"
-                                style="flex: 1; background: rgba(0, 200, 140, 0.18); border-color: #00c88c;"
-                                title="Fetches the latest sysprompt.txt (Normal mode) and writes it to your Quick Prompt Main box.">
-                                <i class="fa-solid fa-arrow-up-from-bracket"></i> Update (Normal)
-                            </button>
-                            <button id="rpg_tracker_btn_update_sysprompt_legacy" class="menu_button interactable"
-                                style="flex: 1; background: rgba(200, 170, 0, 0.18); border-color: #ccaa00;"
-                                title="Fetches the legacy sysprompt (without Tool Calls) and writes it to your Quick Prompt Main box.">
-                                <i class="fa-solid fa-arrow-up-from-bracket"></i> Update (Legacy)
-                            </button>
-                        </div>
-                        <button id="rpg_tracker_btn_reset_and_apply_sysprompt" class="menu_button interactable"
-                            style="width: 100%; margin-top: 4px; background: rgba(80, 140, 255, 0.18); border-color: #5588ff;"
-                            title="Resets ALL prompts (Core, Stock Modules, Block Order) and writes sysprompt.txt to Quick Prompt Main box.">
-                            <i class="fa-solid fa-rotate"></i> Reset All &amp; Apply
-                        </button>
-
-                        <hr>
                         <div style="font-weight: bold; font-size: 0.85em; opacity: 0.8; margin-bottom: 4px;">AI-Assisted Section Builder</div>
                         <div style="font-size: 0.78em; opacity: 0.6; line-height: 1.4; margin-bottom: 6px;">
                             Describe a new system/mechanic and let AI generate a new &lt;section&gt; block. You can review, retry, or edit before it's appended to your sysprompt.
@@ -1016,56 +999,20 @@
                                 <i class="fa-solid fa-pen-to-square"></i> Add Manually
                             </button>
                         </div>
-                        <button id="rpg_tracker_btn_sysprompt_library" class="menu_button interactable"
-                            style="width: 100%; margin-top: 4px; background: rgba(50, 150, 255, 0.15); border-color: rgba(50, 150, 255, 0.4);" title="Manage saved custom sysprompt sections">
-                            <i class="fa-solid fa-book-open"></i> Custom Sysprompt Library
-                        </button>
+                        <div class="flex-container gap-1" style="margin-top: 4px; width: 100%;">
+                            <button id="rpg_tracker_btn_sysprompt_library" class="menu_button interactable"
+                                style="flex: 1; background: rgba(50, 150, 255, 0.15); border-color: rgba(50, 150, 255, 0.4);" title="Manage saved custom sysprompt sections">
+                                <i class="fa-solid fa-book-open"></i> Custom Sysprompt Library
+                            </button>
+                            <button id="rpg_tracker_btn_reset_sysprompt_library" class="menu_button interactable"
+                                style="width: auto; padding: 0 12px; background: rgba(255, 100, 100, 0.15); border-color: rgba(255, 100, 100, 0.4);" title="Disable all custom sysprompt sections and reset the system prompt to defaults">
+                                <i class="fa-solid fa-rotate-left"></i>
+                            </button>
+                        </div>
+
                     </div>
                 </div>
             </div>
-
-            <div class="inline-drawer">
-                <div class="inline-drawer-toggle inline-drawer-header">
-                    <i class="fa-solid fa-flask" style="margin-right: 8px; opacity: 0.7;"></i>
-                    <b>Experimental Features</b>
-                    <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
-                </div>
-                <div class="inline-drawer-content">
-                    <div class="flex-container flexFlowColumn gap-1">
-                        <div style="font-size: 0.8em; opacity: 0.75; line-height: 1.4; margin-bottom: 8px; border: 1px solid rgba(255, 160, 0, 0.25); border-radius: 6px; padding: 10px 12px; background: rgba(255, 160, 0, 0.05);">
-                            ⚠️ Features here are experimental and may behave unpredictably. They may increase token usage, change model behavior, or produce unexpected results. Use at your own discretion.
-                            <br><br>
-                            <b style="color: #ff6b6b; font-size: 1.05em; text-decoration: underline; display: inline-block; margin-bottom: 2px;">Neither of these review modes should be needed</b>, but they can potentially increase state update reliability with some weak models. Token cost is somewhat increased.
-                        </div>
-
-                        <div style="border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; padding: 10px 12px; margin-bottom: 8px;">
-                            <label class="checkbox_label" style="margin-bottom: 6px;">
-                                <input id="rpg_tracker_experimental_half_review" type="checkbox" />
-                                <span style="font-weight: bold;">Half Review Mode</span>
-                                <i class="fa-solid fa-circle-question interactable" style="font-size: 0.85em; opacity: 0.7; margin-left: 4px;" title="A medium-intensity review. Tweaks the delta-only prompt to request complete output via regex replacements. Balanced token usage."></i>
-                            </label>
-                            <div style="font-size: 0.78em; opacity: 0.6; line-height: 1.45; padding-left: 24px;">
-                                A medium-intensity review mode. Adjusts the State Tracker prompt with regex tweaks to request complete output from all sections. Good balance of token usage and accuracy.
-                            </div>
-                        </div>
-                        <div style="border: 1px solid rgba(255, 80, 80, 0.2); border-radius: 6px; padding: 10px 12px; background: rgba(255, 60, 60, 0.04);">
-                            <label class="checkbox_label" style="margin-bottom: 6px;">
-                                <input id="rpg_tracker_experimental_full_review" type="checkbox" />
-                                <span style="font-weight: bold; color: #ff8866;">Full Review Mode</span>
-                                <i class="fa-solid fa-circle-question interactable" style="font-size: 0.85em; opacity: 0.7; margin-left: 4px;" title="AGGRESSIVE. Completely rewrites the system prompt to forcefully demand every single field. Highest token usage but guarantees nothing is missed."></i>
-                            </label>
-                            <div style="font-size: 0.78em; opacity: 0.6; line-height: 1.45; padding-left: 24px;">
-                                <b style="color: #ff8866;">AGGRESSIVE.</b> Completely rewrites the State Tracker system prompt to forcefully demand every single field \u2014 including all custom fields \u2014 is reviewed and output. Enumerates every enabled module by name.
-                                <br><br>
-                                <b>Trade-off:</b> Highest token usage per update, but <b>guarantees</b> nothing is missed. Use when accuracy is more important than cost.
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-
-
         </div>
     </div>
 </div>
