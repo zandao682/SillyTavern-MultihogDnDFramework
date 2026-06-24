@@ -2,6 +2,15 @@
 
 All notable changes to the **Multihog D&D Framework** will be documented in this file.
 
+## [3.11.0] - 2026-06-24
+
+### Added
+- **Protect Persistent NPC Lore Sections**: Implemented wrapping of persistent NPC lore sections (Appearance, Personality, Brief Background, Habits/Behaviors, Relationship) inside `[LORE] ... [/LORE]` tags to protect them from cleanup passes.
+- **UI Tag Hiding**: Programmed the UI manifest synopses and structured sections rendering to automatically strip `[LORE]` tags, keeping the presentation clean.
+- **Cleanup Tool Lore Protection**: Updated the cleanup agent instructions to strictly preserve `[LORE] ... [/LORE]` blocks unchanged and automatically wrap legacy untagged NPC entries.
+- **NPC Inline Quick-View**: Enabled NPC card expansion inline on single-click (matching Location behavior) to easily read full campaign logs and history, adding a new dedicated `View NPC card` button to the card actions overlay for rich details popup access.
+- **Relationship Key Normalization**: Resolved a pre-existing layout bug by normalizing the `Relationship with {{user}}` section name to `Relationship`, restoring correct icon and coloring rendering in the UI.
+
 ## [3.10.0] - 2026-06-23
 
 NPCs V2.
