@@ -323,6 +323,23 @@ function extractTextContent(msg) {
     return String(raw);
 }
 
+/**
+ * Formats a lorebook entry block for injection into the GM/narrator prompt.
+ * Automatically prepends any active NPC relationship status values if relationship bars are enabled.
+ */
+function buildInjectedEntryText(id, entry, settings) {
+    let content = entry.content || '';
+    const rel = settings.npcRelationshipValues?.[id];
+    if (rel && settings.npcRelationshipBars) {
+        const friendship = rel.friendship ?? 0;
+        const affection = rel.affection ?? 0;
+        // Inject relationship values immediately below the entity header
+        content = `Relationship with {{user}}: Friendship: ${friendship}/100, Affection: ${affection}/100\n${content}`;
+    }
+    const label = entry.key?.[0] || entry.comment || id.split('::')[1];
+    return `### [${label}]\n${content}\n\n`;
+}
+
 export function installInterceptor() {
     globalThis.rpgTrackerInterceptor = async function (chat, contextSize, abort, type) {
         const settings = getSettings();
@@ -504,7 +521,7 @@ export function installInterceptor() {
                                 if (!bookCache[bookName]) bookCache[bookName] = await ctx.loadWorldInfo(bookName);
                                 const entry = bookCache[bookName]?.entries?.[uid];
                                 if (entry?.content) {
-                                    loreBlock += `### [${entry.key?.[0] || entry.comment || uid}]\n${entry.content}\n\n`;
+                                    loreBlock += buildInjectedEntryText(id, entry, settings);
                                 }
                             }
                             if (loreBlock) {
@@ -529,7 +546,7 @@ export function installInterceptor() {
                                 if (!bookCache[bookName]) bookCache[bookName] = await ctx.loadWorldInfo(bookName);
                                 const entry = bookCache[bookName]?.entries?.[uid];
                                 if (entry?.content) {
-                                    persistBlock += `### [${entry.key?.[0] || entry.comment || uid}]\n${entry.content}\n\n`;
+                                    persistBlock += buildInjectedEntryText(id, entry, settings);
                                 }
                             }
                             if (persistBlock) {
@@ -559,7 +576,7 @@ export function installInterceptor() {
                                 if (!bookCache[bookName]) bookCache[bookName] = await ctx.loadWorldInfo(bookName);
                                 const entry = bookCache[bookName]?.entries?.[uid];
                                 if (entry?.content) {
-                                    agentBlock += `### [${entry.key?.[0] || entry.comment || uid}]\n${entry.content}\n\n`;
+                                    agentBlock += buildInjectedEntryText(id, entry, settings);
                                 }
                             }
                             if (agentBlock) {
