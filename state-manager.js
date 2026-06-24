@@ -21,7 +21,7 @@ export const MODULE_NAME = 'rpg_tracker';
  * @returns {string}
  */
 export function buildNpcInstruction(majorWords = 25, minorWords = 15) {
-    let instruction = `Named characters the party interacts with. Do NOT create an entry for {{user}}. Mention {{user}} in EVENT or QUEST entries as needed.
+    let instruction = `Named characters the party interacts with. Do NOT create an entry for {{user}}. Mention {{user}} in EVENT or QUEST entries as needed. Always use the exact macro string \`{{user}}\` when referring to the player; do NOT write the plain word "user" or "player".
 
 <CORE_FORMAT>
 IMPORTANT: The entry MUST start directly with the [CORE] tag. Do NOT prepend any timestamps, dates, or other text before the [CORE] tag. Wrap the immutable identity sections (Appearance, Personality, Brief Background, Habits/Behaviors) inside a single \`[CORE]\` and \`[/CORE]\` tag block. The Description field inside the [[ ]] tags must contain this block. These sections are permanent — once written they must NOT be rewritten, overwritten, or updated through normal entry update/record operations.
@@ -392,6 +392,8 @@ When an entity (location, NPC, etc.) changes in a meaningful way, update the ass
 
 Entries are append-only chronicles. Provide ONLY the new information as a timestamped delta (e.g. "[Day 3, 14:00] The forge was destroyed."). Do NOT rewrite or re-summarize the full entry. Do NOT copy, paraphrase, or reconstruct content already present in the existing entry. Only the net-new development belongs in your delta.
 
+IMPORTANT: Always use the exact macro string \`{{user}}\` when referring to the player. Do NOT write the plain word "user" or "player" in your entry updates.
+
 For locations: the [ID:] stamp at the top of every injected entry gives you the ID to pass to the update tool.
 IMPORTANT: Never include the [ID:] line in the content field you write. It is managed automatically — only use the ID value in the "id" field of the update tool.
 
@@ -650,6 +652,15 @@ Example: [[FAC: Iron Syndicate | ...]]  NOT  [[FAC: Khelt :: Iron Syndicate | ..
             s.routerModules.npc.instruction = buildNpcInstruction(s.npcMajorWords, s.npcMinorWords);
         }
         s.settingsVersion = '3.15.0';
+    }
+
+    // Enforce {{user}} macro usage and prevent literal "user" or "player" text (v3.16.0)
+    if (!s.settingsVersion || s.settingsVersion < '3.16.0') {
+        if (s.routerModules?.npc) {
+            s.routerModules.npc.instruction = buildNpcInstruction(s.npcMajorWords, s.npcMinorWords);
+        }
+        s.systemPromptTemplate = defaults.systemPromptTemplate;
+        s.settingsVersion = '3.16.0';
     }
 
 

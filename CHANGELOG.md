@@ -2,6 +2,11 @@
 
 All notable changes to the **Multihog D&D Framework** will be documented in this file.
 
+## [3.16.0] - 2026-06-24
+
+### Changed
+- **{{user}} Macro Reinforcement**: Added explicit rules to `buildNpcInstruction` and the general system prompt (`systemPromptTemplate`'s `updating_entities` block) telling the AI model to always use the exact macro string `{{user}}` when referring to the player character/user, instead of writing "user" or "player" in plain text.
+
 ## [3.15.0] - 2026-06-24
 
 ### Added
