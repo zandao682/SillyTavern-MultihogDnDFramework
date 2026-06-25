@@ -885,8 +885,13 @@ export async function processRelationshipTags() {
     }
 
     if (anyChanged) {
+        // Prevent infinite allocations on manual edits/swipes by renaming the processed tag
+        lastMsg.mes = lastMsg.mes.replace(/\[REL:/gi, '[PROCESSED_REL:');
+        if (typeof ctx.saveChatDebounced === 'function') ctx.saveChatDebounced();
+
         ctx.saveSettingsDebounced?.();
         if (typeof globalThis._rpgRenderRouterUI === 'function') globalThis._rpgRenderRouterUI();
+        if (typeof globalThis._rpgRefreshNpcManifest === 'function') globalThis._rpgRefreshNpcManifest();
         document.dispatchEvent(new CustomEvent('rt_lore_agent_updated'));
     }
 }
