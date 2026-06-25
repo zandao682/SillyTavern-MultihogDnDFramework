@@ -27,7 +27,7 @@ export const COLOR_EXAMPLES = `<font color=#ff5555>Red Text</font>
 // ── Default module prompts ─────────────────────────────────────────────────────
 
 export const DEFAULT_STOCK_PROMPTS = {
-    character: `Main character's core stats. Use this format:
+  character: `Main character's core stats. Use this format:
 [CHARACTER]
 {{user}} (Class): current/max HP
 Combat: BAB: +X | Ranged: +X | Melee: +X | Base AC: X | Total AC: Z
@@ -43,7 +43,7 @@ Status: Effect (duration Xh Xm)
 
 AC CALCULATION: Calculate Total AC as Base AC (usually 10 + DEX modifier) plus the sum of AC bonuses from all equipped items (items under [INVENTORY] tagged with '[E]', e.g. Shield (+2 AC) or Plate Armor (+8 AC)).
 Upon LEVEL UP, incorporate attribute changes.`,
-    party: `Companion/Party members. Use this format for each member:
+  party: `Companion/Party members. Use this format for each member:
 Name (Class): current/max HP
 Combat: BAB: +X | Ranged: +X | Melee: +X | Base AC: X | Total AC: Z
 Gear: Weapon (stats) | Armor Name (+Y AC)
@@ -77,7 +77,7 @@ Spells: Level 1 (2/2): Hunter's Mark, Goodberry
 HD: d10 (5/5)
 Status: Healthy
 [/PARTY]`,
-    combat: `Active enemies/NPCs in combat. Track the current COMBAT ROUND starting from 1. Decrement buff/debuff durations by 1 each round. Format each combatant as:
+  combat: `Active enemies/NPCs in combat. Track the current COMBAT ROUND starting from 1. Decrement buff/debuff durations by 1 each round. Format each combatant as:
 COMBAT ROUND X
 Name: current/max HP
 Att/def: Weapon (+X / damage) | Armor (AC: Z)
@@ -86,7 +86,7 @@ Other: Trait1 (description), Trait2 (description)
 Status: Effect (duration)
 
 You MUST output \`[COMBAT]END_COMBAT[/COMBAT]\` when the narrative ends combat. Do not put members of [PARTY] into [COMBAT].`,
-    inventory: `Items, loot, equipment, and wealth. You MAY create this section if loot is found and it doesn't currently exist.
+  inventory: `Items, loot, equipment, and wealth. You MAY create this section if loot is found and it doesn't currently exist.
 
 Organize into two sections using plain-text headers:
 - Gear: — weapons, armor, and worn/equipped items
@@ -112,18 +112,18 @@ Other Items:
 - 🪢 [Common] Rope, 50 ft (~1 GP)
 - 💰 1,200 GP
 [/INVENTORY]`,
-    abilities: `Non-spell class features and active abilities ONLY (e.g. Lay on Hands, Action Surge). NEVER mix these with spells. Format each entry as: \`Ability Name (brief description)\`.`,
-    spells: "Spell slots and spells known, grouped by level. Format each line as: `Level N (avail/max): Spell1, Spell2`. For cantrips, use `Cantrips: Spell1, Spell2`. Track slot usage accurately. NEVER mix these with abilities.",
-    time: `Current time and day grabbed from the status footer. Also track time of the last rest (only on Long Rest, e.g. 'Last Rest: 10:00 PM, Day 0'). Use this to track out-of-combat buff durations by comparing to the PRIOR MEMO's time.
+  abilities: `Non-spell class features and active abilities ONLY (e.g. Lay on Hands, Action Surge). NEVER mix these with spells. Format each entry as: \`Ability Name (brief description)\`.`,
+  spells: "Spell slots and spells known, grouped by level. Format each line as: `Level N (avail/max): Spell1, Spell2`. For cantrips, use `Cantrips: Spell1, Spell2`. Track slot usage accurately. NEVER mix these with abilities.",
+  time: `Current time and day grabbed from the status footer. Also track time of the last rest (only on Long Rest, e.g. 'Last Rest: 10:00 PM, Day 0'). Use this to track out-of-combat buff durations by comparing to the PRIOR MEMO's time.
 
 Format:
 Last Rest: HH:MM AM/PM, Day N
 Current Time: HH:MM AM/PM, Day N
 
 'Last Rest' is ONLY triggered on Long Rest, NOT Short Rest (when Hit Dice, etc, are spent.) If the [TIME] delta between PREVIOUS STATE MEMO and your current update is only an hour, it is a Short Rest.`,
-    xp: "Character Level and Experience Points (XP). Format as `Level: X | XP: current/max`. You MUST output this field whenever the narrative mentions gaining experience or leveling up.",
-    quests: `Quest status updates ONLY. When a quest objective is completed, a quest concludes, or a new objective is added, emit a [QUESTS] block containing ONLY a JSON object with an "updates" array. Each entry must have the quest "id" and only the fields that changed or are new: "status" (active/completed/failed), "difficulty", and/or "objectives" (array). For updating an existing objective: include {"id", "status", "progress"}. For quantity-based objectives (e.g. "collect 6 mushrooms"), include "progress" as the current count (e.g. 4) even if the objective is not yet completed. To add a new objective: omit the "id" field and provide {"text", "required" (boolean), "status" (optional, defaults to "active"), "total" (optional), "progress" (optional)}. NOTE: Do NOT fail quests for time-out/deadline reasons (the system handles those automatically), but YOU MUST mark a quest as "failed" if it becomes narratively impossible (e.g. a protection target dies). Do NOT re-emit the full quest schema. If no quest changed, omit this block entirely.`,
-    quests_legacy: `Track quests using the [QUESTS] block. Maintain the COMPLETE list of all quests at all times — active, completed, and failed. Only add a quest if [QUEST ACCEPTED] is outputted in the narrative. NEVER ADD A QUEST UNLESS YOU SEE [QUEST ACCEPTED]. A quest simply being listed does not mean it is accepted.
+  xp: "Character Level and Experience Points (XP). Format as `Level: X | XP: current/max`. You MUST output this field whenever the narrative mentions gaining experience or leveling up.",
+  quests: `Quest status updates ONLY. When a quest objective is completed, a quest concludes, or a new objective is added, emit a [QUESTS] block containing ONLY a JSON object with an "updates" array. Each entry must have the quest "id" and only the fields that changed or are new: "status" (active/completed/failed), "difficulty", and/or "objectives" (array). For updating an existing objective: include {"id", "status", "progress"}. For quantity-based objectives (e.g. "collect 6 mushrooms"), include "progress" as the current count (e.g. 4) even if the objective is not yet completed. To add a new objective: omit the "id" field and provide {"text", "required" (boolean), "status" (optional, defaults to "active"), "total" (optional), "progress" (optional)}. NOTE: Do NOT fail quests for time-out/deadline reasons (the system handles those automatically), but YOU MUST mark a quest as "failed" if it becomes narratively impossible (e.g. a protection target dies). Do NOT re-emit the full quest schema. If no quest changed, omit this block entirely.`,
+  quests_legacy: `Track quests using the [QUESTS] block. Maintain the COMPLETE list of all quests at all times — active, completed, and failed. Only add a quest if [QUEST ACCEPTED] is outputted in the narrative. NEVER ADD A QUEST UNLESS YOU SEE [QUEST ACCEPTED]. A quest simply being listed does not mean it is accepted.
 
 Format each quest exactly as shown:
 
@@ -166,7 +166,7 @@ EMERGENT QUESTS: When the player pursues a clear, sustained goal through action 
 // ── Embedded sysprompts — mobile/Termux fallback (fetch preferred, this is the safety net) ──
 
 export const RT_PROMPTS = {
-    'sysprompt.txt': `<role>
+  'sysprompt.txt': `<role>
 You are a Dungeon Master/World Simulator running a D&D-style tabletop RPG. Narrate the world, simulate NPCs, adjudicate rules, and manage all mechanical systems invisibly. In combat, simulate all NPC actions, but NOT {{user}}'s actions, in initiative order.
 </role>
 
@@ -482,7 +482,7 @@ EXAMPLE — end of a response where {{user}} complimented Elena:
 - Do not track/output remaining spell slots, buffs, resources in the status footer; all of that is handled by an external resource tracker.
 </inventory_and_resource_constraints>
 </constraints>`,
-    'sysprompt_legacy.txt': `<role>
+  'sysprompt_legacy.txt': `<role>
 You are a Dungeon Master/World Simulator running a D&D-style tabletop RPG. Narrate the world, simulate NPCs, adjudicate rules, and manage all mechanical systems invisibly. In combat, simulate all NPC actions, but NOT {{user}}'s actions, in initiative order.
 </role>
 
@@ -818,9 +818,9 @@ EXAMPLE — end of a response where {{user}} complimented Elena:
 // ── Renderer / block layout constants ─────────────────────────────────────────
 
 export const BLOCK_ICONS = {
-    TIME: '🕒', XP: '🌟', CHARACTER: '🧙', PARTY: '👥',
-    COMBAT: '⚔️', INVENTORY: '🎒', ABILITIES: '✨', SPELLS: '📖',
-    QUESTS: '📋',
+  TIME: '🕒', XP: '🌟', CHARACTER: '🧙', PARTY: '👥',
+  COMBAT: '⚔️', INVENTORY: '🎒', ABILITIES: '✨', SPELLS: '📖',
+  QUESTS: '📋',
 };
 
 export const BLOCK_ORDER = ['COMBAT', 'CHARACTER', 'PARTY', 'INVENTORY', 'ABILITIES', 'SPELLS', 'XP', 'TIME', 'QUESTS'];

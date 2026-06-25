@@ -336,7 +336,7 @@ function buildInjectedEntryText(id, entry, settings) {
         // Inject relationship values immediately below the entity header
         content = `Relationship with {{user}}: Friendship: ${friendship}/100, Affection: ${affection}/100\n${content}`;
     }
-    const label = entry.key?.[0] || entry.comment || id.split('::')[1];
+const label = entry.key?.[0] || entry.comment || id.split('::')[1];
     return `### [${label}]\n${content}\n\n`;
 }
 
@@ -559,7 +559,7 @@ export function installInterceptor() {
                 const triggered = await scanAssistantOutputForKeywords(content, { sweepEnabled: false }).catch(() => []);
                 console.log('activeRouterKeys AFTER scan:', JSON.stringify(settings.activeRouterKeys || []));
                 console.log('newly triggered this scan:', triggered);
-                console.log(`scan finished @ ${performance.now().toFixed(1)}ms`);
+                console.log(`scan finished @ ${performance.now().toFixed(1) }ms`);
 
                 // Trigger UI refresh so the Agent Panel updates immediately with yellow pills
                 if (triggered.length > 0 && typeof globalThis._rpgRenderRouterUI === 'function') {
@@ -790,22 +790,8 @@ export function installInterceptor() {
     };
 }
 
-
-// ── Relationship tag processor ─────────────────────────────────────────────────
-
 /**
  * Processes [REL: Name | field | delta] tags emitted by the narrator AI.
- *
- * For each tag found in the last assistant message:
- *  1. Resolves the NPC first-name to an active lorebook entry ID
- *  2. Applies the delta to settings.npcRelationshipValues (clamped ±100)
- *  3. Appends to settings.npcRelationshipLog with source:'ai'
- *  4. Writes the updated values back to the lorebook entry (the persistent database)
- *  5. Shows a toast notification
- * Then strips all [REL: ...] tags from the visible message and refreshes the UI.
- *
- * Called as Step 0 of onGenerationEnded so bars update on EVERY turn, even when
- * the Lorebook Agent is throttled.
  */
 export async function processRelationshipTags() {
     const settings = getSettings();
@@ -823,24 +809,22 @@ export async function processRelationshipTags() {
     if (!lastMsg) return;
 
     const rawText = lastMsg.mes || '';
-    if (!rawText.includes('[REL:')) return; // fast exit
+    if (!rawText.includes('[REL:')) return;
 
-    // Strict regex exactly matching what the AI is told to output
+    // Regex matches [REL: Name | field | delta]
     const REL_RE = /\[REL:\s*([^|\]]+)\|\s*(friendship|affection)\s*\|\s*([+-]?\d+)\s*\]/gi;
-    let matches = [];
+    const matches = [];
     let match;
     while ((match = REL_RE.exec(rawText)) !== null) {
         matches.push({ name: match[1].trim(), field: match[2].toLowerCase(), delta: parseInt(match[3], 10) });
     }
 
-    if (!matches.length) return;
+    if (matches.length === 0) return;
 
-    // Combine all active keys from the state manager's tracking
     const activeKeys = [...(settings.activeRouterKeys || []), ...(settings.activeWorldKeys || [])];
     const bookCache = {};
     const activeEntries = [];
 
-    // Cache the active entries to search against
     for (const id of activeKeys) {
         const [bookName, uid] = id.split('::');
         if (!bookName || !uid) continue;
@@ -850,103 +834,47 @@ export async function processRelationshipTags() {
         const entry = bookCache[bookName]?.entries?.[uid];
         if (!entry) continue;
 
-        // Clean the display name from the comment field
-        const rawComment = entry.comment || '';
-        const displayName = rawComment.replace(/^\[.*?\]\s*/i, '').trim();
-        
-        // Extract all keywords as an array of lowercase strings
+        const displayName = (entry.comment || '').replace(/^\[.*?\]\s*/i, '').trim();
         const keywords = Array.isArray(entry.key) ? entry.key.map(k => k.toLowerCase().trim()) : [];
-
-        activeEntries.push({ id, displayName, keywords, comment: rawComment.toLowerCase() });
+        activeEntries.push({ id, displayName, keywords, comment: (entry.comment || '').toLowerCase() });
     }
 
     let anyChanged = false;
 
     for (const m of matches) {
         if (m.delta === 0) continue;
-        
         const targetName = m.name.toLowerCase();
-        let resolvedId = null;
+        const resolved = activeEntries.find(e => 
+            e.displayName.toLowerCase() === targetName || 
+            e.keywords.some(k => k === targetName) || 
+            e.comment.includes(targetName)
+        );
 
-        // PASS 1: Exact Display Name match
-        const exactMatch = activeEntries.find(e => e.displayName.toLowerCase() === targetName);
-        if (exactMatch) {
-            resolvedId = exactMatch.id;
-        } else {
-            // PASS 2: Search within keywords
-            // The AI might output "Harys", and the keyword might be "Ser Harys Swyft"
-            const keywordMatch = activeEntries.find(e => 
-                e.keywords.some(k => k.includes(targetName) || targetName.includes(k))
-            );
-            if (keywordMatch) {
-                resolvedId = keywordMatch.id;
-            } else {
-                // PASS 3: Broad substring match against the raw comment
-                const commentMatch = activeEntries.find(e => e.comment.includes(targetName));
-                if (commentMatch) resolvedId = commentMatch.id;
-            }
-        }
+        if (!resolved) continue;
 
-        if (!resolvedId) {
-            if (settings.debugMode) console.log(`[RPG Tracker] REL: Could not map "${m.name}" to any active entry.`);
-            // @ts-ignore
-            toastr.warning(`Could not map AI relationship tag for "${m.name}" to an active Lorebook entry.`, 'RPG Tracker');
-            continue;
-        }
-
-        // Apply delta directly to the central settings state
         if (!settings.npcRelationshipValues) settings.npcRelationshipValues = {};
-        if (!settings.npcRelationshipValues[resolvedId]) {
-            settings.npcRelationshipValues[resolvedId] = { friendship: 0, affection: 0 };
-        }
-        const prev = settings.npcRelationshipValues[resolvedId][m.field] ?? 0;
-        const newVal = Math.max(-100, Math.min(100, prev + m.delta));
-        settings.npcRelationshipValues[resolvedId][m.field] = newVal;
+        if (!settings.npcRelationshipValues[resolved.id]) settings.npcRelationshipValues[resolved.id] = { friendship: 0, affection: 0 };
+        
+        const prev = settings.npcRelationshipValues[resolved.id][m.field] ?? 0;
+        settings.npcRelationshipValues[resolved.id][m.field] = Math.max(-100, Math.min(100, prev + m.delta));
 
-        // Log entry for the UI history
         if (!settings.npcRelationshipLog) settings.npcRelationshipLog = {};
-        if (!settings.npcRelationshipLog[resolvedId]) settings.npcRelationshipLog[resolvedId] = [];
-        settings.npcRelationshipLog[resolvedId].unshift({
-            timestamp: Date.now(),
-            field: m.field,
-            delta: m.delta,
-            newValue: newVal,
-            source: 'ai',
-        });
-        if (settings.npcRelationshipLog[resolvedId].length > 50) {
-            settings.npcRelationshipLog[resolvedId].length = 50;
-        }
-
-        // Toast success
-        const sign = m.delta > 0 ? '+' : '';
-        const icon = m.field === 'friendship' ? '🤝' : '💗';
-        const label = m.field === 'friendship' ? 'Friendship' : 'Affection';
-        // @ts-ignore
-        toastr.info(`${icon} ${m.name}: ${sign}${m.delta} ${label}`, 'Relationship', { timeOut: 3500, positionClass: 'toast-bottom-right' });
-
+        if (!settings.npcRelationshipLog[resolved.id]) settings.npcRelationshipLog[resolved.id] = [];
+        settings.npcRelationshipLog[resolved.id].unshift({ timestamp: Date.now(), field: m.field, delta: m.delta, newValue: settings.npcRelationshipValues[resolved.id][m.field], source: 'ai' });
+        
         anyChanged = true;
     }
 
-    // Always strip the tags from the visible message, even if no matches resolved.
-    // We do not want machine tags visible to the user or lingering in the chat context.
-    lastMsg.mes = rawText.replace(/\[REL:\s*[^|\]]+\|\s*(?:friendship|affection)\s*\|\s*[+-]?\d+\s*\]/gi, '').trimEnd();
+    lastMsg.mes = rawText.replace(REL_RE, '').trimEnd();
 
-    // Update the DOM to hide it immediately
     try {
         const lastMesEl = document.querySelector('#chat .mes:last-of-type .mes_text');
-        if (lastMesEl) {
-            const html = lastMesEl.innerHTML;
-            const cleaned = html.replace(/\[REL:\s*[^|<]+\|\s*(?:friendship|affection)\s*\|\s*[+-]?\d+\s*\]/gi, '');
-            if (cleaned !== html) lastMesEl.innerHTML = cleaned;
-        }
+        if (lastMesEl) lastMesEl.innerHTML = lastMesEl.innerHTML.replace(REL_RE, '');
     } catch (_) {}
 
-    // Persist modifications to chat history
     if (typeof ctx.saveChatDebounced === 'function') ctx.saveChatDebounced();
-    
     if (anyChanged) {
         ctx.saveSettingsDebounced?.();
-        // Force the Campaign Records UI to rerender and show the new relationship bars
         if (typeof globalThis._rpgRenderRouterUI === 'function') globalThis._rpgRenderRouterUI();
         document.dispatchEvent(new CustomEvent('rt_lore_agent_updated'));
     }
