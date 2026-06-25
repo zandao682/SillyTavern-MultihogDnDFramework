@@ -2,10 +2,22 @@
 
 All notable changes to the **Multihog D&D Framework** will be documented in this file.
 
+## [3.16.14] - 2026-06-25
+
+### Added
+- **Relationship Bars System Rework**: Overhauled the NPC relationship bar system from a cosmetic feature into a functional, AI-driven mechanic. The narrator AI now emits inline annotations (e.g. `*(Affection: Elena +2 — sincere compliment)*`) at the point of interaction and machine tags (`[REL: Name | field | delta]`) at the end of each response. Tags are automatically parsed, deltas applied to the relationship bars (clamped ±100), and the updated values written back to lorebook NPC entries as the persistent campaign database. Context injection (`[NPC_RELATIONS]`) provides the narrator with a live snapshot of current standings for active NPCs only, keeping token usage minimal. System prompt guidance added with calibrated delta examples for both Friendship and Affection.
+
+## [3.16.13] - 2026-06-25
+
+### Changed
+- **Significant NPC Filtering**: Updated the core NPC instruction template to instruct the model to only record characters who are significant to the campaign (excluding minor nameless NPCs, generic random enemies, or nameless bartenders).
+- **Combat Granularity and Summarization Rules**: Reinforced prompts across NPC instructions, event modules, main Researcher Agent update rules, and the Lorebook Archivist cleanup/consolidation rules to forbid granular, turn-by-turn combat status logging (HP updates, condition tracking, minor actions). Instructed models to summarize combat history into macro-level outcomes while explicitly preserving the combat initiation (e.g. who/what attacked {{user}}), progress updates every ~5 rounds for long-running fights, and final resolution.
+
 ## [3.16.10] - 2026-06-25
 
 ### Added
 - **Restored NPC Relationship Bars**: Reverted the removal of the NPC Relationship Bars feature, bringing it back in FULL.
+
 
 ## [3.16.9] - 2026-06-25
 
