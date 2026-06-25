@@ -836,8 +836,8 @@ export async function processRelationshipTags() {
                     delta: parsedDelta 
                 });
                 msgHasMatch = true;
-                // Wrap in <!--TRACKER: to integrate with the user's regex preset
-                return `<!--TRACKER: ${matchStr}-->`;
+                // Wrap in standard HTML comments so it is natively hidden by the Markdown parser
+                return `<!-- ${matchStr} -->`;
             }
 
             return matchStr; // If it was malformed beyond repair, don't touch it
