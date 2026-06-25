@@ -497,13 +497,6 @@ export function installInterceptor() {
         // In Path 1 (addPromptManagerInterceptor), these are built and injected by that interceptor
         // into a dedicated system message at the configured depth, protecting the prefix cache.
         if (!skipInjection) {
-            // [NPC_RELATIONS] block — prepended first so it has maximum salience in context.
-            // Shows the narrator current relationship standings for all active NPCs.
-            if (settings.npcRelationshipBars) {
-                const relBlock = await buildNpcRelationsBlock(settings);
-                if (relBlock) injections += relBlock;
-            }
-
             if (settings.rngEnabled && !content.includes("[RNG_QUEUE v6.0_PROPER]")) {
                 const queue = makeRngQueue(RNG_QUEUE_LEN);
                 injections += buildRngBlock(queue);
@@ -1092,6 +1085,26 @@ export function resetRouterTick(clearKeywordPool = false) {
  */
 export async function onGenerationEnded() {
     const settings = getSettings();
+
+    // Step 0: Relationship tag processing — runs FIRST, before all other guards
+    // (isStateRunning, combinedNarrative, throttles). This guarantees bars update
+    // on every single generation regardless of any other system state.
+    if (settings.enabled && !settings.paused) {
+        await processRelationshipTags();
+
+        // Inject [NPC_RELATIONS] as a system ephemeral prompt so it reaches the narrator
+        // regardless of whether Path 1 or Path 2 context injection is active.
+        if (settings.npcRelationshipBars) {
+            const ctx = SillyTavern.getContext();
+            if (typeof ctx.setExtensionPrompt === 'function') {
+                const relBlock = await buildNpcRelationsBlock(settings);
+                // Position 1 = before main prompt, depth 0 = top of context.
+                // Empty string clears the slot when there are no active NPCs.
+                ctx.setExtensionPrompt('rpg_tracker_npc_relations', relBlock, 1, 0);
+            }
+        }
+    }
+
     const isStateRunning = typeof globalThis._rpgStateModelRunning === 'function' && globalThis._rpgStateModelRunning();
     if (!settings.enabled || settings.paused || isStateRunning) return;
 
@@ -1113,10 +1126,6 @@ export async function onGenerationEnded() {
     const { chat } = SillyTavern.getContext();
     const combinedNarrative = getNarrativeBlocks(chat, -1, !!settings.routerIncludeHidden);
     if (!combinedNarrative) return;
-
-    // Step 0: Process relationship tags — runs on EVERY generation, before all throttles,
-    // so bars update in real time even when the Lorebook Agent is idle.
-    await processRelationshipTags();
 
     if (settings.debugMode) console.log("[RPG Tracker] Assistant generation ended. Running keyword scanner...");
 
