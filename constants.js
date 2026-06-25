@@ -406,6 +406,52 @@ Status: Condition
 - Short Rest interruption: also active, but the DC should be easier, generally lower than DC 8 unless the area is extremely hostile and dangerous.
 </resting>
 
+<relationship_tracking>
+RELATIONSHIP TRACKING — only active when [NPC_RELATIONS] appears in context.
+
+[NPC_RELATIONS] at the top of each turn shows current standings with active NPCs. Scale: -100 (deep hostility) to +100 (deep bond). Friendship = platonic trust. Affection = romantic/emotional warmth.
+
+WHEN TO EMIT:
+Be selective and natural about it. Only emit when {{user}} directly and meaningfully interacted with an NPC in this response — a real moment worth noting. An NPC being referenced, mentioned, or discussed by others does not warrant a tag.
+
+INLINE ANNOTATION (visible — place immediately after the triggering moment):
+*(Friendship: Marcus +10 — saved his life in the alley)*
+*(Affection: Elena +2 — she seemed touched by the compliment)*
+
+MACHINE TAGS (stripped before display — place ALL at the very end of the response, one per line):
+[REL: FirstName | field | delta]
+  FirstName = NPC's first name only | field = friendship or affection | delta = signed integer
+
+FRIENDSHIP EXAMPLES (guides, not hard rules):
++1/+2 ... Small warmth, casual kindness, shared laugh
++2/+5 ... Genuine compliment, meaningful help with a problem
++5/+10 .. Surviving danger together, real heartfelt conversation
++10/+15 . Protecting or defending them, significant act of loyalty
++15/+25 . Saving their life
++25/+30 . Blood oath, brotherhood/sisterhood pact
+-3/-5 ... Minor let-down, small broken promise
+-5/-10 .. Insult, dismissal, belittling
+-10/-20 . Public humiliation, badmouthing them (if overheard)
+-20/-30 . Abandoning them in danger
+-40/-60 . Betraying them to an enemy
+
+AFFECTION EXAMPLES (guides, not hard rules):
++1 ...... Subtle kind gesture, attentive small detail
++2/+3 ... Sincere compliment on appearance, wit, or spirit
++5/+10 .. Sweet gift, emotional gesture, intimate conversation
++10/+20 . Protective act (romantic context), vulnerable confession
++20/+30 . Romantic proposal (if receptive)
+-2/-3 ... Cold or dismissive behavior (per instance)
+-5/-10 .. Public rejection or embarrassment
+-8/-15 .. Flirting with someone else in their presence
+-40/-60 . Romantic betrayal or cheating
+
+EXAMPLE — end of a response where {{user}} complimented Elena:
+*(Affection: Elena +2 — she seemed genuinely moved by the words)*
+
+[REL: Elena | affection | +2]
+</relationship_tracking>
+
 <state_memo>
 - ## TRACKER STATE 0 (Current) is passed on every turn; its mechanical data is absolute law.
 - Ignore any formatting data such as ((PLS)).
@@ -692,6 +738,52 @@ Status: Condition
 - Long Rest interruption: If the party rests in a dangerous location, roll a d20 to determine whether the rest is interrupted by enemies. The DC depends on the danger level of the location; the more dangerous the location, the higher the DC for a safe rest.
 - Short Rest interruption: also active, but the DC should be easier, generally lower than DC 8 unless the area is extremely hostile and dangerous.
 </resting>
+
+<relationship_tracking>
+RELATIONSHIP TRACKING — only active when [NPC_RELATIONS] appears in context.
+
+[NPC_RELATIONS] at the top of each turn shows current standings with active NPCs. Scale: -100 (deep hostility) to +100 (deep bond). Friendship = platonic trust. Affection = romantic/emotional warmth.
+
+WHEN TO EMIT:
+Be selective and natural about it. Only emit when {{user}} directly and meaningfully interacted with an NPC in this response — a real moment worth noting. An NPC being referenced, mentioned, or discussed by others does not warrant a tag.
+
+INLINE ANNOTATION (visible — place immediately after the triggering moment):
+*(Friendship: Marcus +10 — saved his life in the alley)*
+*(Affection: Elena +2 — she seemed touched by the compliment)*
+
+MACHINE TAGS (stripped before display — place ALL at the very end of the response, one per line):
+[REL: FirstName | field | delta]
+  FirstName = NPC's first name only | field = friendship or affection | delta = signed integer
+
+FRIENDSHIP EXAMPLES (guides, not hard rules):
++1/+2 ... Small warmth, casual kindness, shared laugh
++2/+5 ... Genuine compliment, meaningful help with a problem
++5/+10 .. Surviving danger together, real heartfelt conversation
++10/+15 . Protecting or defending them, significant act of loyalty
++15/+25 . Saving their life
++25/+30 . Blood oath, brotherhood/sisterhood pact
+-3/-5 ... Minor let-down, small broken promise
+-5/-10 .. Insult, dismissal, belittling
+-10/-20 . Public humiliation, badmouthing them (if overheard)
+-20/-30 . Abandoning them in danger
+-40/-60 . Betraying them to an enemy
+
+AFFECTION EXAMPLES (guides, not hard rules):
++1 ...... Subtle kind gesture, attentive small detail
++2/+3 ... Sincere compliment on appearance, wit, or spirit
++5/+10 .. Sweet gift, emotional gesture, intimate conversation
++10/+20 . Protective act (romantic context), vulnerable confession
++20/+30 . Romantic proposal (if receptive)
+-2/-3 ... Cold or dismissive behavior (per instance)
+-5/-10 .. Public rejection or embarrassment
+-8/-15 .. Flirting with someone else in their presence
+-40/-60 . Romantic betrayal or cheating
+
+EXAMPLE — end of a response where {{user}} complimented Elena:
+*(Affection: Elena +2 — she seemed genuinely moved by the words)*
+
+[REL: Elena | affection | +2]
+</relationship_tracking>
 
 <state_memo>
 - ## TRACKER STATE 0 (Current) is passed on every turn; its mechanical data is absolute law.

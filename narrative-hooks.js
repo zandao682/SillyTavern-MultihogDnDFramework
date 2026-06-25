@@ -14,7 +14,7 @@
 
 import { getSettings } from './state-manager.js';
 import { parseQuestsFromMemo, extractCurrentTimeStr, cleanMessageContent } from './memo-processor.js';
-import { runRouterPass, saveSceneToLorebook, scanAssistantOutputForKeywords, parseInWorldMinutes, runWorldProgressionPass } from './router.js';
+import { runRouterPass, saveSceneToLorebook, scanAssistantOutputForKeywords, parseInWorldMinutes, runWorldProgressionPass, updateLorebookEntry } from './router.js';
 import { logTransaction } from './debug-viewer.js';
 
 // ── Dice naming helpers ────────────────────────────────────────────────────────
@@ -340,6 +340,57 @@ function buildInjectedEntryText(id, entry, settings) {
     return `### [${label}]\n${content}\n\n`;
 }
 
+/**
+ * Builds the [NPC_RELATIONS] context block summarising current relationship standings
+ * for all active NPC lorebook entries. Injected at the top of each turn's context so
+ * the narrator knows where it stands with present characters before writing.
+ *
+ * Only includes NPCs whose lorebook book name ends with _npcs / _npc (case-insensitive).
+ * Returns an empty string if no relevant active entries exist.
+ *
+ * @param {ReturnType<typeof import('./state-manager.js').getSettings>} settings
+ * @returns {Promise<string>}
+ */
+async function buildNpcRelationsBlock(settings) {
+    if (!settings.npcRelationshipBars) return '';
+    const relVals = settings.npcRelationshipValues || {};
+    const activeKeys = settings.activeRouterKeys || [];
+    if (!activeKeys.length) return '';
+
+    const ctx = SillyTavern.getContext();
+    const lines = [];
+    /** @type {Record<string, any>} */
+    const bookCache = {};
+
+    for (const id of activeKeys) {
+        const [bookName, uid] = id.split('::');
+        if (!bookName || !uid) continue;
+        // Only NPC books
+        const bl = bookName.toLowerCase();
+        if (!bl.endsWith('_npcs') && !bl.endsWith('_npc') && bl !== 'npcs' && bl !== 'npc') continue;
+
+        if (!bookCache[bookName]) {
+            try { bookCache[bookName] = await ctx.loadWorldInfo(bookName); } catch (_) { bookCache[bookName] = null; }
+        }
+        const entry = bookCache[bookName]?.entries?.[uid];
+        if (!entry) continue;
+
+        // Strip [Major] / [Minor] prefix from comment to get the display name
+        const displayName = (entry.comment || '').replace(/^\[.*?\]\s*/i, '').trim();
+        if (!displayName) continue;
+
+        const rel = relVals[id] || { friendship: 0, affection: 0 };
+        const f = rel.friendship ?? 0;
+        const a = rel.affection ?? 0;
+        const fStr = `Friendship ${f >= 0 ? '+' : ''}${f}`;
+        const aStr = `Affection ${a >= 0 ? '+' : ''}${a}`;
+        lines.push(`${displayName}: ${fStr}, ${aStr}`);
+    }
+
+    if (!lines.length) return '';
+    return `[NPC_RELATIONS]\n${lines.join('\n')}\n[/NPC_RELATIONS]\n\n`;
+}
+
 export function installInterceptor() {
     globalThis.rpgTrackerInterceptor = async function (chat, contextSize, abort, type) {
         const settings = getSettings();
@@ -444,6 +495,13 @@ export function installInterceptor() {
         // In Path 1 (addPromptManagerInterceptor), these are built and injected by that interceptor
         // into a dedicated system message at the configured depth, protecting the prefix cache.
         if (!skipInjection) {
+            // [NPC_RELATIONS] block — prepended first so it has maximum salience in context.
+            // Shows the narrator current relationship standings for all active NPCs.
+            if (settings.npcRelationshipBars) {
+                const relBlock = await buildNpcRelationsBlock(settings);
+                if (relBlock) injections += relBlock;
+            }
+
             if (settings.rngEnabled && !content.includes("[RNG_QUEUE v6.0_PROPER]")) {
                 const queue = makeRngQueue(RNG_QUEUE_LEN);
                 injections += buildRngBlock(queue);
@@ -730,6 +788,191 @@ export function installInterceptor() {
 }
 
 
+// ── Relationship tag processor ─────────────────────────────────────────────────
+
+/**
+ * Processes [REL: Name | field | delta] tags emitted by the narrator AI.
+ *
+ * For each tag found in the last assistant message:
+ *  1. Resolves the NPC first-name to an active lorebook entry ID
+ *  2. Applies the delta to settings.npcRelationshipValues (clamped ±100)
+ *  3. Appends to settings.npcRelationshipLog with source:'ai'
+ *  4. Writes the updated values back to the lorebook entry (the persistent database)
+ *  5. Shows a toast notification
+ * Then strips all [REL: ...] tags from the visible message and refreshes the UI.
+ *
+ * Called as Step 0 of onGenerationEnded so bars update on EVERY turn, even when
+ * the Lorebook Agent is throttled.
+ */
+export async function processRelationshipTags() {
+    const settings = getSettings();
+    if (!settings.npcRelationshipBars || !settings.enabled) return;
+
+    const ctx = SillyTavern.getContext();
+    const chat = ctx.chat || [];
+
+    // Find the last assistant (non-user, non-system) message
+    let lastMsg = null;
+    for (let i = chat.length - 1; i >= 0; i--) {
+        if (!chat[i].is_user && !chat[i].is_system) { lastMsg = chat[i]; break; }
+    }
+    if (!lastMsg) return;
+
+    const rawText = lastMsg.mes || '';
+    if (!rawText.includes('[REL:')) return; // fast exit — no tags at all
+
+    const REL_RE = /\[REL:\s*([^|\]]+)\|\s*(friendship|affection)\s*\|\s*([+-]?\d+)\s*\]/gi;
+    const matches = [];
+    let m;
+    while ((m = REL_RE.exec(rawText)) !== null) {
+        const delta = parseInt(m[3], 10);
+        if (!isNaN(delta)) matches.push({ raw: m[0], name: m[1].trim(), field: m[2].toLowerCase(), delta });
+    }
+    if (!matches.length) return;
+
+    // ── Build first-name lookup from active NPC lorebook entries ──────────────
+    const activeKeys = settings.activeRouterKeys || [];
+    /** @type {Record<string, any>} */
+    const bookCache = {};
+    // firstNameMap: lowerCaseFirstName -> [{ id, displayName }]
+    /** @type {Record<string, Array<{id:string, displayName:string}>>} */
+    const firstNameMap = {};
+
+    for (const id of activeKeys) {
+        const [bookName, uid] = id.split('::');
+        if (!bookName || !uid) continue;
+        const bl = bookName.toLowerCase();
+        if (!bl.endsWith('_npcs') && !bl.endsWith('_npc') && bl !== 'npcs' && bl !== 'npc') continue;
+
+        if (!bookCache[bookName]) {
+            try { bookCache[bookName] = await ctx.loadWorldInfo(bookName); } catch (_) { bookCache[bookName] = null; }
+        }
+        const entry = bookCache[bookName]?.entries?.[uid];
+        if (!entry) continue;
+
+        const displayName = (entry.comment || '').replace(/^\[.*?\]\s*/i, '').trim();
+        if (!displayName) continue;
+
+        const firstName = displayName.split(/\s+/)[0].toLowerCase();
+        if (!firstNameMap[firstName]) firstNameMap[firstName] = [];
+        firstNameMap[firstName].push({ id, displayName });
+    }
+
+    // ── Process each match ────────────────────────────────────────────────────
+    let anyChanged = false;
+
+    for (const match of matches) {
+        if (match.delta === 0) continue;
+
+        // Resolve NPC name → entry ID
+        const nameLower = match.name.toLowerCase();
+        const candidates = firstNameMap[nameLower] || [];
+        let resolvedId = null;
+
+        if (candidates.length === 1) {
+            resolvedId = candidates[0].id;
+        } else if (candidates.length > 1) {
+            // Ambiguous first name — try exact full-name match
+            const full = candidates.find(c => c.displayName.toLowerCase() === nameLower);
+            if (full) resolvedId = full.id;
+            else {
+                if (settings.debugMode) console.warn(`[RPG Tracker] REL: ambiguous NPC name "${match.name}" (${candidates.length} matches) — skipping.`);
+                continue;
+            }
+        } else {
+            if (settings.debugMode) console.log(`[RPG Tracker] REL: NPC "${match.name}" not found in active NPC keys — skipping.`);
+            continue;
+        }
+
+        // Apply delta
+        if (!settings.npcRelationshipValues) settings.npcRelationshipValues = {};
+        if (!settings.npcRelationshipValues[resolvedId]) {
+            settings.npcRelationshipValues[resolvedId] = { friendship: 0, affection: 0 };
+        }
+        const prev = settings.npcRelationshipValues[resolvedId][match.field] ?? 0;
+        const newVal = Math.max(-100, Math.min(100, prev + match.delta));
+        settings.npcRelationshipValues[resolvedId][match.field] = newVal;
+
+        // Log entry
+        if (!settings.npcRelationshipLog) settings.npcRelationshipLog = {};
+        if (!settings.npcRelationshipLog[resolvedId]) settings.npcRelationshipLog[resolvedId] = [];
+        settings.npcRelationshipLog[resolvedId].unshift({
+            timestamp: Date.now(),
+            field: match.field,
+            delta: match.delta,
+            newValue: newVal,
+            source: 'ai',
+        });
+        if (settings.npcRelationshipLog[resolvedId].length > 50) {
+            settings.npcRelationshipLog[resolvedId].length = 50;
+        }
+
+        // Toast
+        const sign = match.delta > 0 ? '+' : '';
+        const icon = match.field === 'friendship' ? '🤝' : '💗';
+        const label = match.field === 'friendship' ? 'Friendship' : 'Affection';
+        // @ts-ignore
+        toastr.info(`${icon} ${match.name}: ${sign}${match.delta} ${label}`, 'Relationship', { timeOut: 3500, positionClass: 'toast-bottom-right' });
+
+        // ── Lorebook database write (async, fire-and-forget) ──────────────────
+        // Writes the updated values as a "Relationship:" line outside [CORE]
+        // so the Lorebook Agent has a persistent readable record.
+        const [bookName, uid] = resolvedId.split('::');
+        const relSnapshot = { ...settings.npcRelationshipValues[resolvedId] };
+        (async () => {
+            try {
+                const book = await ctx.loadWorldInfo(bookName);
+                if (!book?.entries?.[uid]) return;
+                const entry = book.entries[uid];
+                let content = entry.content || '';
+
+                const f = relSnapshot.friendship ?? 0;
+                const a = relSnapshot.affection ?? 0;
+                const relLine = `Relationship: Friendship ${f >= 0 ? '+' : ''}${f}, Affection ${a >= 0 ? '+' : ''}${a}`;
+
+                // Replace existing Relationship: line or append after content
+                if (/^Relationship:\s*Friendship/m.test(content)) {
+                    content = content.replace(/^Relationship:\s*Friendship[^\n]*/m, relLine);
+                } else {
+                    content = content.trimEnd() + '\n' + relLine;
+                }
+
+                await updateLorebookEntry(resolvedId, { content });
+                if (settings.debugMode) console.log(`[RPG Tracker] REL: wrote "${relLine}" to ${resolvedId}`);
+            } catch (e) {
+                console.warn('[RPG Tracker] REL: lorebook write failed:', e);
+            }
+        })();
+
+        anyChanged = true;
+    }
+
+    if (!anyChanged) return;
+
+    // ── Strip [REL: ...] tags from the visible message ────────────────────────
+    lastMsg.mes = rawText.replace(/\[REL:\s*[^|\]]+\|\s*(?:friendship|affection)\s*\|\s*[+-]?\d+\s*\]/gi, '').trimEnd();
+
+    // Update the rendered DOM so the stripped message is immediately visible
+    try {
+        const lastMesEl = /** @type {HTMLElement|null} */ (document.querySelector('#chat .mes:last-of-type .mes_text'));
+        if (lastMesEl) {
+            // Use the same render path SillyTavern uses: update innerText for the stripped tag lines
+            // A lightweight approach: remove any visible [REL: ...] text nodes
+            const html = lastMesEl.innerHTML;
+            const cleaned = html.replace(/\[REL:\s*[^|<]+\|\s*(?:friendship|affection)\s*\|\s*[+-]?\d+\s*\]/gi, '');
+            if (cleaned !== html) lastMesEl.innerHTML = cleaned;
+        }
+    } catch (_) { /* non-critical */ }
+
+    // Persist
+    ctx.saveSettingsDebounced?.();
+
+    // Refresh NPC card bars + manifest UI
+    if (typeof globalThis._rpgRenderRouterUI === 'function') globalThis._rpgRenderRouterUI();
+    document.dispatchEvent(new CustomEvent('rt_lore_agent_updated'));
+}
+
+
 // ── Narrative collector ────────────────────────────────────────────────────────
 
 /**
@@ -834,6 +1077,10 @@ export async function onGenerationEnded() {
     const { chat } = SillyTavern.getContext();
     const combinedNarrative = getNarrativeBlocks(chat, -1, !!settings.routerIncludeHidden);
     if (!combinedNarrative) return;
+
+    // Step 0: Process relationship tags — runs on EVERY generation, before all throttles,
+    // so bars update in real time even when the Lorebook Agent is idle.
+    await processRelationshipTags();
 
     if (settings.debugMode) console.log("[RPG Tracker] Assistant generation ended. Running keyword scanner...");
 
