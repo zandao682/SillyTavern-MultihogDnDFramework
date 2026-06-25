@@ -106,7 +106,7 @@ For the State Tracker and Lorebook Agent, use Gemini 3.1 Flash. It's good enough
 ---
 
 <p align="center">
-  <img src="https://github.com/user-attachments/assets/0fc898ec-f27a-45f4-bc63-d229e3685695" width="500" alt="Lorebook Agent" />
+  <img src="https://github.com/user-attachments/assets/829b233c-19f0-407b-99a8-f58e80573a0a" width="500" alt="Lorebook Agent" />
   <br>
   <strong>Lorebook Agent</strong>
 </p>
