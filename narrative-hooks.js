@@ -365,9 +365,6 @@ async function buildNpcRelationsBlock(settings) {
     for (const id of activeKeys) {
         const [bookName, uid] = id.split('::');
         if (!bookName || !uid) continue;
-        // Only NPC books
-        const bl = bookName.toLowerCase();
-        if (!bl.endsWith('_npcs') && !bl.endsWith('_npc') && bl !== 'npcs' && bl !== 'npc') continue;
 
         if (!bookCache[bookName]) {
             try { bookCache[bookName] = await ctx.loadWorldInfo(bookName); } catch (_) { bookCache[bookName] = null; }
@@ -375,8 +372,13 @@ async function buildNpcRelationsBlock(settings) {
         const entry = bookCache[bookName]?.entries?.[uid];
         if (!entry) continue;
 
-        // Strip [Major] / [Minor] prefix from comment to get the display name
-        const displayName = (entry.comment || '').replace(/^\[.*?\]\s*/i, '').trim();
+        // NPC entries are identified by a [Major] or [Minor] tier prefix in their comment.
+        // This is framework-universal — works regardless of which lorebook the NPC lives in.
+        const rawComment = entry.comment || '';
+        if (!/^\[(Major|Minor)\]/i.test(rawComment)) continue;
+
+        // Strip the tier prefix to get the display name
+        const displayName = rawComment.replace(/^\[.*?\]\s*/i, '').trim();
         if (!displayName) continue;
 
         const rel = relVals[id] || { friendship: 0, affection: 0 };
@@ -830,19 +832,26 @@ export async function processRelationshipTags() {
     }
     if (!matches.length) return;
 
-    // ── Build first-name lookup from active NPC lorebook entries ──────────────
+    // ── Build multi-key name lookup from active NPC lorebook entries ──────────
+    // NPC entries are identified by [Major]/[Minor] comment prefix (framework standard).
+    // The map stores MULTIPLE keys per NPC: full name, each significant word (length > 2).
+    // This resolves titled NPCs like "Ser Harys Swyft" whether the AI writes the full
+    // name, a partial name, or just a given name.
     const activeKeys = settings.activeRouterKeys || [];
     /** @type {Record<string, any>} */
     const bookCache = {};
-    // firstNameMap: lowerCaseFirstName -> [{ id, displayName }]
     /** @type {Record<string, Array<{id:string, displayName:string}>>} */
-    const firstNameMap = {};
+    const nameMap = {};
+
+    const _addToMap = (key, entry) => {
+        if (!key || key.length < 2) return;
+        if (!nameMap[key]) nameMap[key] = [];
+        nameMap[key].push(entry);
+    };
 
     for (const id of activeKeys) {
         const [bookName, uid] = id.split('::');
         if (!bookName || !uid) continue;
-        const bl = bookName.toLowerCase();
-        if (!bl.endsWith('_npcs') && !bl.endsWith('_npc') && bl !== 'npcs' && bl !== 'npc') continue;
 
         if (!bookCache[bookName]) {
             try { bookCache[bookName] = await ctx.loadWorldInfo(bookName); } catch (_) { bookCache[bookName] = null; }
@@ -850,12 +859,22 @@ export async function processRelationshipTags() {
         const entry = bookCache[bookName]?.entries?.[uid];
         if (!entry) continue;
 
-        const displayName = (entry.comment || '').replace(/^\[.*?\]\s*/i, '').trim();
+        // NPC entries identified by [Major]/[Minor] tier prefix in comment
+        const rawComment = entry.comment || '';
+        if (!/^\[(Major|Minor)\]/i.test(rawComment)) continue;
+
+        const displayName = rawComment.replace(/^\[.*?\]\s*/i, '').trim();
         if (!displayName) continue;
 
-        const firstName = displayName.split(/\s+/)[0].toLowerCase();
-        if (!firstNameMap[firstName]) firstNameMap[firstName] = [];
-        firstNameMap[firstName].push({ id, displayName });
+        const rec = { id, displayName };
+        const nameLc = displayName.toLowerCase();
+
+        // Key 1: full display name ("ser harys swyft")
+        _addToMap(nameLc, rec);
+        // Key 2: each significant word (length > 2), so "harys", "swyft", "ser" all resolve
+        for (const word of nameLc.split(/\s+/)) {
+            if (word.length > 2) _addToMap(word, rec);
+        }
     }
 
     // ── Process each match ────────────────────────────────────────────────────
@@ -865,16 +884,33 @@ export async function processRelationshipTags() {
         if (match.delta === 0) continue;
 
         // Resolve NPC name → entry ID
+        // Strategy: exact full-name match first, then word-by-word fallback.
         const nameLower = match.name.toLowerCase();
-        const candidates = firstNameMap[nameLower] || [];
+
+        // Pass 1: exact match on the full tag name (handles "Ser Harys Swyft", "Elena", etc.)
+        let candidates = nameMap[nameLower] || [];
+
+        // Pass 2: word-by-word fallback — union of all candidates whose display name
+        // shares at least one significant word with the tag name.
+        if (!candidates.length) {
+            const tagWords = nameLower.split(/\s+/).filter(w => w.length > 2);
+            const seen = new Map();
+            for (const word of tagWords) {
+                for (const c of (nameMap[word] || [])) {
+                    if (!seen.has(c.id)) seen.set(c.id, c);
+                }
+            }
+            candidates = [...seen.values()];
+        }
+
         let resolvedId = null;
 
         if (candidates.length === 1) {
             resolvedId = candidates[0].id;
         } else if (candidates.length > 1) {
-            // Ambiguous first name — try exact full-name match
-            const full = candidates.find(c => c.displayName.toLowerCase() === nameLower);
-            if (full) resolvedId = full.id;
+            // Ambiguous — prefer the candidate whose full display name most closely matches
+            const exact = candidates.find(c => c.displayName.toLowerCase() === nameLower);
+            if (exact) resolvedId = exact.id;
             else {
                 if (settings.debugMode) console.warn(`[RPG Tracker] REL: ambiguous NPC name "${match.name}" (${candidates.length} matches) — skipping.`);
                 continue;
