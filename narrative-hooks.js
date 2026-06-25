@@ -801,22 +801,31 @@ export async function processRelationshipTags() {
     if (!ctx.chat || ctx.chat.length === 0) return;
     const chat = ctx.chat;
 
-    // Find the last assistant message
-    let lastMsg = null;
-    for (let i = chat.length - 1; i >= 0; i--) {
-        if (!chat[i].is_user && !chat[i].is_system) { lastMsg = chat[i]; break; }
-    }
-    if (!lastMsg) return;
-
-    const rawText = lastMsg.mes || '';
-    if (!rawText.includes('[REL:')) return;
-
-    // Regex matches [REL: Name | field | delta]
-    const REL_RE = /\[REL:\s*([^|\]]+)\|\s*(friendship|affection)\s*\|\s*([+-]?\d+)\s*\]/gi;
+    // Regex matches [REL: Name | field | delta] but IGNORES ones already wrapped in <!-- -->
+    const REL_RE = /(?<!<!--\s*)\[REL:\s*([^|\]]+)\|\s*(friendship|affection)\s*\|\s*([+-]?\s*\d+)\s*\]/gi;
+    
     const matches = [];
-    let match;
-    while ((match = REL_RE.exec(rawText)) !== null) {
-        matches.push({ name: match[1].trim(), field: match[2].toLowerCase(), delta: parseInt(match[3], 10) });
+    let lastMsg = null;
+    let anyChanged = false;
+
+    // Scan the last 3 messages (catches AI outputs AND user-typed manual overrides)
+    for (let i = chat.length - 1; i >= Math.max(0, chat.length - 3); i--) {
+        const msg = chat[i];
+        if (!msg || !msg.mes) continue;
+        if (!msg.mes.includes('[REL:')) continue;
+
+        let match;
+        let msgHasMatch = false;
+        while ((match = REL_RE.exec(msg.mes)) !== null) {
+            matches.push({ name: match[1].trim(), field: match[2].toLowerCase(), delta: parseInt(match[3].replace(/\s+/g, ''), 10) });
+            msgHasMatch = true;
+        }
+
+        if (msgHasMatch) {
+            // Always WRAP the tags in HTML comments so they are hidden from the user but remain in the context
+            msg.mes = msg.mes.replace(REL_RE, (m) => `<!-- ${m} -->`).trimEnd();
+            lastMsg = msg; // Track that we modified at least one message
+        }
     }
 
     if (matches.length === 0) return;
@@ -839,17 +848,17 @@ export async function processRelationshipTags() {
         activeEntries.push({ id, displayName, keywords, comment: (entry.comment || '').toLowerCase() });
     }
 
-    let anyChanged = false;
-
-    // Always strip the tags from the visible message FIRST to ensure they don't linger even if processing crashes
-    lastMsg.mes = rawText.replace(REL_RE, '').trimEnd();
-
     try {
-        const lastMesEl = document.querySelector('#chat .mes:last-of-type .mes_text');
-        if (lastMesEl) lastMesEl.innerHTML = lastMesEl.innerHTML.replace(REL_RE, '');
+        // Also force the DOM to hide it immediately if it's in the last message
+        const lastMesEls = document.querySelectorAll('#chat .mes .mes_text');
+        for (const el of lastMesEls) {
+            if (el.innerHTML.includes('[REL:')) {
+                el.innerHTML = el.innerHTML.replace(REL_RE, (m) => `<!-- ${m} -->`);
+            }
+        }
     } catch (_) {}
 
-    if (typeof ctx.saveChatDebounced === 'function') ctx.saveChatDebounced();
+    if (lastMsg && typeof ctx.saveChatDebounced === 'function') ctx.saveChatDebounced();
 
     for (const m of matches) {
         if (m.delta === 0) continue;
