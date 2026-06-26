@@ -863,13 +863,26 @@ export async function processRelationshipTags(msgIndex) {
     
     // Ensure the message has an extra metadata dictionary for tracking processed tags
     lastMsg.extra = lastMsg.extra || {};
-    lastMsg.extra.rpgProcessedTags = lastMsg.extra.rpgProcessedTags || [];
+    // Use swipe_id to prevent previous swipes from falsely deduplicating the current swipe
+    const swipeId = lastMsg.swipe_id ?? 0;
+    
+    // Convert old array format to object-keyed-by-swipe format if needed
+    if (Array.isArray(lastMsg.extra.rpgProcessedTags)) {
+        lastMsg.extra.rpgProcessedTags = { [swipeId]: lastMsg.extra.rpgProcessedTags };
+    } else if (!lastMsg.extra.rpgProcessedTags) {
+        lastMsg.extra.rpgProcessedTags = {};
+    }
+    
+    lastMsg.extra.rpgProcessedTags[swipeId] = lastMsg.extra.rpgProcessedTags[swipeId] || [];
 
     while ((match = REL_RE.exec(lastMsg.mes)) !== null) {
         const matchStr = match[0];
         
-        // Skip if this exact tag string has already been processed for this message
-        if (lastMsg.extra.rpgProcessedTags.includes(matchStr)) continue;
+        // Skip if this exact tag string has already been processed for THIS specific swipe
+        if (lastMsg.extra.rpgProcessedTags[swipeId].includes(matchStr)) {
+            console.log('[RPG Tracker] Skipping tag, already processed for this swipe:', matchStr);
+            continue;
+        }
 
         const cleanName = match[1].replace(/[\u200B\uFEFF]/g, '').trim();
         const cleanField = match[2].replace(/[^a-z]/gi, '').toLowerCase();
@@ -942,9 +955,10 @@ export async function processRelationshipTags(msgIndex) {
             const label = m.field === 'friendship' ? 'Friendship' : 'Affection';
             // @ts-ignore
             toastr.info(`${icon} ${m.name}: ${sign}${m.delta} ${label}`, 'Relationship', { timeOut: 3500, positionClass: 'toast-bottom-right' });
+            console.log(`[RPG Tracker] Applied relationship delta: ${m.name} | ${m.field} | ${m.delta}`);
 
-            // Mark this specific tag string as processed in the message metadata
-            lastMsg.extra.rpgProcessedTags.push(m.rawStr);
+            // Mark this specific tag string as processed in the message metadata for THIS swipe
+            lastMsg.extra.rpgProcessedTags[swipeId].push(m.rawStr);
             anyChanged = true;
         } catch (e) {
             console.error('[RPG Tracker] Error updating relationship for', m.name, e);
