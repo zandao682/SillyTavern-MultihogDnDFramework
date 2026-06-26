@@ -825,14 +825,30 @@ export function installInterceptor() {
 /**
  * Processes [REL: Name | field | delta] tags emitted by the narrator AI.
  */
-export async function processRelationshipTags() {
+export async function processRelationshipTags(msgIndex) {
     const settings = getSettings();
 
     const ctx = SillyTavern.getContext();
     if (!ctx.chat || ctx.chat.length === 0) return;
     
-    // 1. IT SEES LAST CHAT MESSAGE. ONLY
-    const lastMsg = ctx.chat[ctx.chat.length - 1];
+    // Resolve the target message.
+    // If called from MESSAGE_UPDATED, msgIndex is the exact message to check.
+    // If called from GENERATION_ENDED (no index), scan backwards for the last
+    // AI message that actually contains a [REL:] tag — avoids the race where
+    // chat.length-1 is still the user's turn when the event fires.
+    let lastMsg;
+    if (typeof msgIndex === 'number' && msgIndex >= 0 && msgIndex < ctx.chat.length) {
+        lastMsg = ctx.chat[msgIndex];
+    } else {
+        // Scan from end backwards, skipping user messages, until we find one with [REL:]
+        for (let i = ctx.chat.length - 1; i >= Math.max(0, ctx.chat.length - 5); i--) {
+            const msg = ctx.chat[i];
+            if (msg && !msg.is_user && msg.mes && /\[REL:/i.test(msg.mes)) {
+                lastMsg = msg;
+                break;
+            }
+        }
+    }
     if (!lastMsg || !lastMsg.mes) return;
     if (!/\[REL:/i.test(lastMsg.mes)) return;
 
@@ -1141,9 +1157,10 @@ export function resetRouterTick(clearKeywordPool = false) {
 export async function onGenerationEnded() {
     const settings = getSettings();
 
-    // Step 0: Relationship tag processing - runs FIRST, unconditionally.
-    // This guarantees bars update on every single generation even if the main lore agent is paused.
-    await processRelationshipTags();
+    // Step 0: Relationship tag processing — deferred one tick so ST has time
+    // to fully commit the AI message to ctx.chat before we try to read it.
+    // Without this, ctx.chat[length-1] can still be the user's message.
+    setTimeout(() => processRelationshipTags(), 0);
 
     const isStateRunning = typeof globalThis._rpgStateModelRunning === 'function' && globalThis._rpgStateModelRunning();
     if (!settings.enabled || settings.paused || isStateRunning) return;
