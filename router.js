@@ -474,7 +474,7 @@ export async function runRouterPass(narrativeOutput, manualPrompt = null, custom
 7. Do NOT activate, deactivate, record, or delete entries except via CONSOLIDATE targets.
 8. Do NOT consolidate entries of different categories (e.g., do NOT merge an NPC or Location into a Quest or Event). Consolidation is strictly for true duplicates representing the exact same entity or concept (e.g., two entries for the same NPC).
 9. Do NOT merge multiple distinct chronological events into a single entry to "reduce fragmentation". Each distinct event must remain as a separate entry so it triggers on its own keywords.
-10. NEVER modify, shorten, or delete content within \`[CORE] ... [/CORE]\` blocks under any circumstances. Keep the tags and their inner content completely unchanged.
+10. NEVER modify, shorten, or delete content within \`[CORE] ... [/CORE]\` blocks under any circumstances. Keep the tags and their inner content completely unchanged. The system programmatically overwrites any modifications to the CORE block with the original, so editing it is useless.
 11. For legacy NPC entries lacking these tags, identify their persistent sections (Appearance/Species, Appearance, Personality, Brief Background, Habits/Behaviors) and wrap them inside a \`[CORE] ... [/CORE]\` block to protect them from future passes. Do not include Relationship, Friendship/Rapport, or Affection/Interest lines inside the block.
 12. Compress turn-by-turn or granular combat status logs (e.g., creature HP changes, turn-by-turn action lists, temporary conditions mid-fight) into high-level updates: for long combats, preserve the initiation (who/what attacked {{user}}), a progress summary every ~5 rounds (capturing major shifts or stalemates), and the final outcome.
 13. Output your reasoning first, then the tags.`;
@@ -496,7 +496,7 @@ For each flagged entry:
 6. Do NOT activate, deactivate, record, or create new entries.
 7. Do NOT consolidate entries of different categories (e.g., do NOT merge an NPC or Location into a Quest or Event). Consolidation is strictly for true duplicates representing the exact same entity (e.g., two entries for the same NPC).
 8. Do NOT merge multiple distinct chronological events into a single entry to "reduce fragmentation". Each distinct historical event must remain as its own entry so it triggers on its specific keywords.
-9. NEVER modify, shorten, or delete content within \`[CORE] ... [/CORE]\` blocks under any circumstances. Keep the tags and their inner content completely unchanged.
+9. NEVER modify, shorten, or delete content within \`[CORE] ... [/CORE]\` blocks under any circumstances. Keep the tags and their inner content completely unchanged. The system programmatically overwrites any modifications to the CORE block with the original, so editing it is useless.
 10. For legacy NPC entries lacking these tags, identify their persistent sections (Appearance/Species, Appearance, Personality, Brief Background, Habits/Behaviors) and wrap them inside a \`[CORE] ... [/CORE]\` block to protect them from future passes. Do not include Relationship, Friendship/Rapport, or Affection/Interest lines inside the block.
 11. Compress turn-by-turn or granular combat status logs (e.g., creature HP changes, turn-by-turn action lists, temporary conditions mid-fight) into high-level updates: for long combats, preserve the initiation (who/what attacked {{user}}), a progress summary every ~5 rounds (capturing major shifts or stalemates), and the final outcome.
 12. Call commit exactly once at the end. Do not call it per-entry.`;
@@ -1328,7 +1328,8 @@ async function applyAction(action, allBooks = {}, currentTime = '', breadcrumb =
         const [bookName, uid] = rw.id.split('::');
         const book = await ctx.loadWorldInfo(bookName);
         if (book?.entries?.[uid]) {
-            book.entries[uid].content = rw.content;
+            const originalContent = book.entries[uid].content || '';
+            book.entries[uid].content = protectCoreBlock(originalContent, rw.content);
             await ctx.saveWorldInfo(bookName, book);
             rewriteIds.push(rw.id);
             changed = true;
@@ -1364,7 +1365,8 @@ async function applyAction(action, allBooks = {}, currentTime = '', breadcrumb =
         const [sBook, sUid] = op.survivor.split('::');
         const sBookData = await ctx.loadWorldInfo(sBook);
         if (sBookData?.entries?.[sUid]) {
-            sBookData.entries[sUid].content = op.content;
+            const originalContent = sBookData.entries[sUid].content || '';
+            sBookData.entries[sUid].content = protectCoreBlock(originalContent, op.content);
             await ctx.saveWorldInfo(sBook, sBookData);
             consolidateIds.push(op.survivor);
         } else {
@@ -2506,6 +2508,32 @@ function deduplicateContent(existing, delta) {
     });
     return newLines.join('\n').trim();
 }
+
+/**
+ * Ensures that if the original content had a [CORE] ... [/CORE] block,
+ * that block is preserved exactly in the new/rewritten content.
+ * Prevents the model from shortening, modifying, or removing the CORE block.
+ * @param {string} originalContent
+ * @param {string} newContent
+ * @returns {string}
+ */
+function protectCoreBlock(originalContent, newContent) {
+    if (!originalContent || !newContent) return newContent;
+    const coreRegex = /\[CORE\]([\s\S]*?)\[\/CORE\]/i;
+    const originalCoreMatch = originalContent.match(coreRegex);
+    if (!originalCoreMatch) return newContent;
+
+    const originalCoreBlock = originalCoreMatch[0];
+    const newCoreMatch = newContent.match(coreRegex);
+    if (newCoreMatch) {
+        // Swap out the new core block with the original pristine one
+        return newContent.replace(coreRegex, originalCoreBlock);
+    } else {
+        // Prepend the original pristine core block if omitted
+        return `${originalCoreBlock}\n${newContent}`;
+    }
+}
+
 
 /**
  * Estimates token count using a ~4 chars/token heuristic.
