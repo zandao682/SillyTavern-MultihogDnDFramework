@@ -5196,7 +5196,7 @@ function createPanel() {
 
                             // Build popup DOM
                             const popupDom = document.createElement('div');
-                            popupDom.style.cssText = 'width:100%;box-sizing:border-box;padding:24px;text-align:left;font-family:var(--rt-font, system-ui, sans-serif);color:var(--SmartThemeBodyColor, inherit);';
+                            popupDom.style.cssText = 'width:100%;box-sizing:border-box;padding:24px;text-align:left;font-family:var(--rt-font, system-ui, sans-serif);color:var(--SmartThemeBodyColor, inherit);max-height:85vh;overflow-y:auto;';
 
                             // Pre-build section HTML (avoids nested template literals confusing IDE)
                             const sectionsInitialHtml = renderSectionsHtml(item.content)
@@ -5215,28 +5215,26 @@ function createPanel() {
                             let relLogHtml = '';
                             if (s.npcRelationshipBars) {
                                 const logEntries = (s.npcRelationshipLog && s.npcRelationshipLog[item.id] || []).slice(0, 20);
-                                if (logEntries.length > 0) {
-                                    let rows = '';
-                                    for (const e of logEntries) {
-                                        const date = new Date(e.timestamp);
-                                        const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})
-                                            + ', ' + date.toLocaleDateString([], {month: 'short', day: 'numeric'});
-                                        const sign = e.delta > 0 ? '+' : '';
-                                        const deltaColor = e.delta > 0 ? '#4ade80' : '#ef4444';
-                                        const srcIcon = e.source === 'manual' ? '✋' : '🤖';
-                                        const fieldLabel = e.field === 'friendship' ? '🤝' : '💗';
-                                        rows += '<tr>'
-                                            + '<td style="font-size:10px;color:var(--SmartThemeBodyColor,inherit);opacity:0.5;padding:3px 8px 3px 0;white-space:nowrap;">' + timeStr + '</td>'
-                                            + '<td style="font-size:12px;padding:3px 8px;">' + fieldLabel + '</td>'
-                                            + '<td style="font-size:13px;font-weight:bold;color:' + deltaColor + ';font-family:monospace;padding:3px 8px;">' + sign + e.delta + '</td>'
-                                            + '<td style="font-size:11px;color:var(--SmartThemeBodyColor,inherit);opacity:0.45;padding:3px 0;">' + srcIcon + ' \u2192 ' + (e.newValue >= 0 ? '+' : '') + e.newValue + '</td>'
-                                            + '</tr>';
-                                    }
-                                    relLogHtml = '<div style="border-top:2px solid rgba(212,169,64,0.15);padding-top:18px;margin-top:18px;">'
-                                        + '<div style="font-size:11px;font-weight:bold;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:4px;">📊 Relationship History</div>'
-                                        + '<table style="width:100%;border-collapse:collapse;">' + rows + '</table>'
-                                        + '</div>';
+                                let rows = '';
+                                for (const e of logEntries) {
+                                    const date = new Date(e.timestamp);
+                                    const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})
+                                        + ', ' + date.toLocaleDateString([], {month: 'short', day: 'numeric'});
+                                    const sign = e.delta > 0 ? '+' : '';
+                                    const deltaColor = e.delta > 0 ? '#4ade80' : '#ef4444';
+                                    const srcIcon = e.source === 'manual' ? '✋' : '🤖';
+                                    const fieldLabel = e.field === 'friendship' ? '🤝' : '💗';
+                                    rows += '<tr>'
+                                        + '<td style="font-size:10px;color:var(--SmartThemeBodyColor,inherit);opacity:0.5;padding:3px 8px 3px 0;white-space:nowrap;">' + timeStr + '</td>'
+                                        + '<td style="font-size:12px;padding:3px 8px;">' + fieldLabel + '</td>'
+                                        + '<td style="font-size:13px;font-weight:bold;color:' + deltaColor + ';font-family:monospace;padding:3px 8px;">' + sign + e.delta + '</td>'
+                                        + '<td style="font-size:11px;color:var(--SmartThemeBodyColor,inherit);opacity:0.45;padding:3px 0;">' + srcIcon + ' \u2192 ' + (e.newValue >= 0 ? '+' : '') + e.newValue + '</td>'
+                                        + '</tr>';
                                 }
+                                relLogHtml = '<div class="rt-npc-log-container" style="border-top:2px solid rgba(212,169,64,0.15);padding-top:18px;margin-top:18px;' + (logEntries.length === 0 ? 'display:none;' : '') + '">'
+                                    + '<div style="font-size:11px;font-weight:bold;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:4px;">📊 Relationship History</div>'
+                                    + '<table class="rt-npc-log-table" style="width:100%;border-collapse:collapse;">' + rows + '</table>'
+                                    + '</div>';
                             }
 
                             popupDom.innerHTML = `
@@ -5292,6 +5290,112 @@ function createPanel() {
                                 viewPane.style.display = 'block';
                             });
 
+                            const bindSlider = (type) => {
+                                const slider = popupDom.querySelector(`#rt-npc-detail-${type}-slider`);
+                                const fill = popupDom.querySelector(`#rt-npc-detail-${type}-fill`);
+                                const text = popupDom.querySelector(`#rt-npc-detail-${type}-text`);
+                                if (!slider || !fill || !text) return;
+                                
+                                let originalValue = parseInt(slider.value, 10) || 0;
+                                
+                                slider.addEventListener('input', () => {
+                                    const val = parseInt(slider.value, 10) || 0;
+                                    const pct = Math.abs(val) / 2;
+                                    const isPos = val >= 0;
+                                    fill.style.width = pct + '%';
+                                    fill.style.left = isPos ? '50%' : 'auto';
+                                    fill.style.right = isPos ? 'auto' : '50%';
+                                    
+                                    const colorPos = type === 'friendship' ? '#4ade80' : '#f472b6';
+                                    const colorNeg = type === 'friendship' ? '#ef4444' : '#a855f7';
+                                    const bgColor = isPos ? colorPos : colorNeg;
+                                    fill.style.background = bgColor;
+                                    
+                                    text.textContent = (val > 0 ? '+' : '') + val;
+                                    text.style.color = val === 0 ? 'var(--SmartThemeEmColor, inherit)' : bgColor;
+                                });
+                                
+                                slider.addEventListener('change', () => {
+                                    const val = parseInt(slider.value, 10) || 0;
+                                    if (val === originalValue) return;
+                                    
+                                    // Log the change
+                                    if (!s.npcRelationshipLog) s.npcRelationshipLog = {};
+                                    if (!s.npcRelationshipLog[item.id]) s.npcRelationshipLog[item.id] = [];
+                                    s.npcRelationshipLog[item.id].unshift({
+                                        timestamp: Date.now(),
+                                        field: type,
+                                        delta: val - originalValue,
+                                        newValue: val,
+                                        source: 'manual'
+                                    });
+                                    if (s.npcRelationshipLog[item.id].length > 20) {
+                                        s.npcRelationshipLog[item.id] = s.npcRelationshipLog[item.id].slice(0, 20);
+                                    }
+                                    
+                                    // Update the setting
+                                    if (!s.npcRelationshipValues) s.npcRelationshipValues = {};
+                                    if (!s.npcRelationshipValues[item.id]) s.npcRelationshipValues[item.id] = { friendship: 0, affection: 0 };
+                                    s.npcRelationshipValues[item.id][type] = val;
+                                    saveSettings();
+                                    
+                                    originalValue = val;
+                                    
+                                    // Re-render the log table
+                                    const logContainer = popupDom.querySelector('.rt-npc-log-container');
+                                    const logTable = popupDom.querySelector('.rt-npc-log-table');
+                                    if (logContainer && logTable) {
+                                        logContainer.style.display = 'block';
+                                        let rows = '';
+                                        for (const e of s.npcRelationshipLog[item.id]) {
+                                            const date = new Date(e.timestamp);
+                                            const timeStr = date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})
+                                                + ', ' + date.toLocaleDateString([], {month: 'short', day: 'numeric'});
+                                            const sign = e.delta > 0 ? '+' : '';
+                                            const deltaColor = e.delta > 0 ? '#4ade80' : '#ef4444';
+                                            const srcIcon = e.source === 'manual' ? '✋' : '🤖';
+                                            const fieldLabel = e.field === 'friendship' ? '🤝' : '💗';
+                                            rows += '<tr>'
+                                                + '<td style="font-size:10px;color:var(--SmartThemeBodyColor,inherit);opacity:0.5;padding:3px 8px 3px 0;white-space:nowrap;">' + timeStr + '</td>'
+                                                + '<td style="font-size:12px;padding:3px 8px;">' + fieldLabel + '</td>'
+                                                + '<td style="font-size:13px;font-weight:bold;color:' + deltaColor + ';font-family:monospace;padding:3px 8px;">' + sign + e.delta + '</td>'
+                                                + '<td style="font-size:11px;color:var(--SmartThemeBodyColor,inherit);opacity:0.45;padding:3px 0;">' + srcIcon + ' \u2192 ' + (e.newValue >= 0 ? '+' : '') + e.newValue + '</td>'
+                                                + '</tr>';
+                                        }
+                                        logTable.innerHTML = rows;
+                                    }
+                                    
+                                    // Dynamically re-render the NPC card in the background UI
+                                    const cardEl = document.querySelector(`.rt-npc-card[data-entry-id="${item.id}"]`);
+                                    if (cardEl) {
+                                        const typeCap = type.charAt(0).toUpperCase() + type.slice(1);
+                                        const bgIsPos = val >= 0;
+                                        const bgBarColor = bgIsPos 
+                                            ? (type === 'friendship' ? '#4ade80' : '#f472b6')
+                                            : (type === 'friendship' ? '#ef4444' : '#a855f7');
+                                        
+                                        const barFill = cardEl.querySelector(`.rt-npc-bar-${type} .rt-npc-bar-fill`);
+                                        if (barFill) {
+                                            barFill.style.width = (Math.abs(val) / 2) + '%';
+                                            barFill.style.left = bgIsPos ? '50%' : 'auto';
+                                            barFill.style.right = bgIsPos ? 'auto' : '50%';
+                                            barFill.style.background = bgBarColor;
+                                        }
+                                        const valText = cardEl.querySelector(`.rt-npc-bar-val[title="${typeCap}"]`);
+                                        if (valText) {
+                                            valText.textContent = (val > 0 ? '+' : '') + val;
+                                            valText.style.color = val === 0 ? 'var(--SmartThemeBodyColor, inherit)' : bgBarColor;
+                                            if (val === 0) valText.style.opacity = '0.5';
+                                            else valText.style.opacity = '1';
+                                        }
+                                    }
+                                });
+                            };
+
+                            if (s.npcRelationshipBars) {
+                                bindSlider('friendship');
+                                bindSlider('affection');
+                            }
 
                             saveBtn.addEventListener('click', async () => {
                                 if (isRouterRunning()) {
@@ -5950,20 +6054,11 @@ function createPanel() {
                 s.npcRelationshipValues[fullId] = { friendship: 0, affection: 0 };
             }
 
-            // Embed avatar as portrait
+            // Embed avatar as portrait (use URL directly to retain original quality and prevent settings bloat)
             if (charCard.avatar) {
                 try {
                     const avatarUrl = `/characters/${encodeURIComponent(charCard.avatar)}`;
-                    const resp = await fetch(avatarUrl, { headers: getRequestHeaders() });
-                    if (resp.ok) {
-                        const blob = await resp.blob();
-                        if (blob.size > 0) {
-                            const blobUrl = URL.createObjectURL(blob);
-                            const scaled = await scaleImageTo512Square(blobUrl);
-                            URL.revokeObjectURL(blobUrl);
-                            applyPortraitData(name, scaled);
-                        }
-                    }
+                    applyPortraitData(name, avatarUrl);
                 } catch (err) {
                     console.warn('[RPG Tracker] Failed to embed character avatar as NPC portrait:', err);
                 }
