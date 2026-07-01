@@ -2,6 +2,12 @@
 
 All notable changes to the **Multihog D&D Framework** will be documented in this file.
 
+## [3.8.9] - 2026-07-01
+
+### Fixed
+- **NPC Portrait Generation Routing**: Fixed a bug where auto-generating portraits for NPCs incorrectly used the default Portrait AI connection settings instead of the dedicated Lorebook Agent AI connection settings, ensuring context-aware models handle the complex lorebook generation.
+- **NPC Word Count Cap**: Raised the internal hard cap for NPC major/minor section word targets from 100 to 1,000 words. Previously, typing a value like `400` in settings would silently clamp and save as `100`, forcing the AI to abbreviate lore. The quick-settings popup and main extension panel now correctly persist custom large limits.
+
 ## [3.8.8] - 2026-06-30
 
 ### Added

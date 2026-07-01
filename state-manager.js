@@ -629,11 +629,13 @@ Example: [[FAC: Iron Syndicate | ...]]  NOT  [[FAC: Khelt :: Iron Syndicate | ..
 
     // Migrate NPC limits from total words to per-section word targets (v3.13.0)
     if (!s.settingsVersion || s.settingsVersion < '3.13.0') {
-        // Convert old total word limits (90/60) to reasonable per-section defaults (25/15)
-        if (s.npcMajorWords === 90 || s.npcMajorWords > 100) {
+        // Convert old total word limits (90/60) to reasonable per-section defaults (25/15).
+        // Only reset clearly legacy token-era values — NOT arbitrary high word counts.
+        // Threshold raised to 1000 so users can freely set values like 200, 300, 400+.
+        if (s.npcMajorWords === 90 || s.npcMajorWords > 1000) {
             s.npcMajorWords = 25;
         }
-        if (s.npcMinorWords === 60 || s.npcMinorWords > 100) {
+        if (s.npcMinorWords === 60 || s.npcMinorWords > 1000) {
             s.npcMinorWords = 15;
         }
         // Rebuild instruction with new length target wording

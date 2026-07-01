@@ -4882,14 +4882,14 @@ function createPanel() {
 
                                     <div style="margin-bottom:14px;">
                                         <label style="font-size:12px;color:rgba(255,255,255,0.7);display:block;margin-bottom:4px;">Major NPC Section Word Target</label>
-                                        <input type="number" id="rt-npc-major-words" value="${curS.npcMajorWords ?? 25}" min="5" max="100" step="5"
+                                        <input type="number" id="rt-npc-major-words" value="${curS.npcMajorWords ?? 25}" min="1" max="1000" step="5"
                                             style="width:100%;background:rgba(0,0,0,0.4);color:white;border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:6px 10px;font-size:13px;box-sizing:border-box;">
                                         <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;">Recurring, plot-important NPCs. Default: 25 words per section</div>
                                     </div>
 
                                     <div style="margin-bottom:14px;">
                                         <label style="font-size:12px;color:rgba(255,255,255,0.7);display:block;margin-bottom:4px;">Minor NPC Section Word Target</label>
-                                        <input type="number" id="rt-npc-minor-words" value="${curS.npcMinorWords ?? 15}" min="5" max="100" step="5"
+                                        <input type="number" id="rt-npc-minor-words" value="${curS.npcMinorWords ?? 15}" min="1" max="1000" step="5"
                                             style="width:100%;background:rgba(0,0,0,0.4);color:white;border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:6px 10px;font-size:13px;box-sizing:border-box;">
                                         <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-top:2px;">Shopkeepers, guards, one-off encounters. Default: 15 words per section</div>
                                     </div>
@@ -4915,10 +4915,13 @@ function createPanel() {
                                     <div style="font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:10px;">Omits the &lt;CORE LENGTH TARGETS&gt; section from the NPC prompt.</div>
                                 </div>`;
 
-                                let newMajor = curS.npcMajorWords ?? 25;
-                                let newMinor = curS.npcMinorWords ?? 15;
                                 let newRel = curS.npcRelationshipBars ?? false;
                                 let newIgnoreLimits = curS.ignoreNpcImportLimits ?? false;
+                                // Track word count values via closure — updated by input events,
+                                // read at save time. Initialized to current saved values so
+                                // leaving them unchanged correctly preserves the user's setting.
+                                let newMajor = curS.npcMajorWords ?? 25;
+                                let newMinor = curS.npcMinorWords ?? 15;
 
                                 setTimeout(() => {
                                     const majorEl = document.getElementById('rt-npc-major-words');
@@ -4926,8 +4929,20 @@ function createPanel() {
                                     const relEl = document.getElementById('rt-npc-rel-bars');
                                     const ignoreEl = document.getElementById('rt-ignore-npc-limits');
 
-                                    if (majorEl) majorEl.addEventListener('input', () => newMajor = parseInt(majorEl.value, 10) || 25);
-                                    if (minorEl) minorEl.addEventListener('input', () => newMinor = parseInt(minorEl.value, 10) || 15);
+                                    if (majorEl) {
+                                        majorEl.addEventListener('input', () => {
+                                            const parsed = parseInt(majorEl.value, 10);
+                                            // Only update if it's a real number — don't clobber on
+                                            // partial input (e.g. empty field while user is typing)
+                                            if (!isNaN(parsed) && parsed > 0) newMajor = parsed;
+                                        });
+                                    }
+                                    if (minorEl) {
+                                        minorEl.addEventListener('input', () => {
+                                            const parsed = parseInt(minorEl.value, 10);
+                                            if (!isNaN(parsed) && parsed > 0) newMinor = parsed;
+                                        });
+                                    }
                                     if (relEl) {
                                         relEl.addEventListener('change', () => {
                                             newRel = relEl.checked;
@@ -4948,27 +4963,29 @@ function createPanel() {
                                 });
 
                                 if (result) {
-                                    newMajor = Math.max(5, Math.min(100, newMajor));
-                                    newMinor = Math.max(5, Math.min(100, newMinor));
+                                    // Clamp final values — min 1 word, max 1000 words
+                                    const finalMajor = Math.max(1, Math.min(1000, newMajor));
+                                    const finalMinor = Math.max(1, Math.min(1000, newMinor));
 
                                     const updS = getSettings();
                                     updS.ignoreNpcImportLimits = newIgnoreLimits;
-                                    updS.npcMajorWords = newMajor;
-                                    updS.npcMinorWords = newMinor;
+                                    updS.npcMajorWords = finalMajor;
+                                    updS.npcMinorWords = finalMinor;
                                     updS.npcRelationshipBars = newRel;
 
                                     // Update the main settings panel inputs if present
-                                    $('#rpg_tracker_npc_major_words').val(newMajor);
-                                    $('#rpg_tracker_npc_minor_words').val(newMinor);
+                                    $('#rpg_tracker_npc_major_words').val(finalMajor);
+                                    $('#rpg_tracker_npc_minor_words').val(finalMinor);
                                     $('#rpg_tracker_npc_rel_bars').prop('checked', newRel);
                                     $('#rpg_tracker_ignore_npc_limits').prop('checked', newIgnoreLimits);
 
                                     // Rebuild the NPC instruction from settings
                                     if (updS.routerModules?.npc) {
-                                        updS.routerModules.npc.instruction = buildNpcInstruction(newMajor, newMinor, newIgnoreLimits);
+                                        updS.routerModules.npc.instruction = buildNpcInstruction(finalMajor, finalMinor, newIgnoreLimits);
                                     }
 
-                                    SillyTavern.getContext().saveSettingsDebounced?.();
+                                    // Use the framework's saveSettings() for consistent persistence
+                                    saveSettings();
                                     toastr['success']('NPC settings saved.', 'NPC Settings');
                                     if (typeof globalThis._rpgRenderAgentModules === 'function') {
                                         globalThis._rpgRenderAgentModules();
@@ -12238,9 +12255,13 @@ RULES:
         });
 
         // NPC Settings Bindings
-        $('#rpg_tracker_npc_major_words').val(settings.npcMajorWords ?? 25).on('input', function () {
-            const val = parseInt(String($(this).val() || '')) || 25;
-            settings.npcMajorWords = Math.max(5, Math.min(100, val));
+        $('#rpg_tracker_npc_major_words').val(settings.npcMajorWords ?? 25).on('change', function () {
+            // Use 'change' instead of 'input' to only save once the user is done editing.
+            // Fall back to the current saved value (not a hardcoded default) if the field is empty.
+            const raw = parseInt(String($(this).val() || ''), 10);
+            const val = isNaN(raw) ? (settings.npcMajorWords ?? 25) : raw;
+            settings.npcMajorWords = Math.max(1, Math.min(1000, val));
+            $(this).val(settings.npcMajorWords); // update display with clamped value
             if (settings.routerModules?.npc) {
                 settings.routerModules.npc.instruction = buildNpcInstruction(settings.npcMajorWords, settings.npcMinorWords, settings.ignoreNpcImportLimits);
             }
@@ -12249,9 +12270,11 @@ RULES:
                 globalThis._rpgRenderAgentModules();
             }
         });
-        $('#rpg_tracker_npc_minor_words').val(settings.npcMinorWords ?? 15).on('input', function () {
-            const val = parseInt(String($(this).val() || '')) || 15;
-            settings.npcMinorWords = Math.max(5, Math.min(100, val));
+        $('#rpg_tracker_npc_minor_words').val(settings.npcMinorWords ?? 15).on('change', function () {
+            const raw = parseInt(String($(this).val() || ''), 10);
+            const val = isNaN(raw) ? (settings.npcMinorWords ?? 15) : raw;
+            settings.npcMinorWords = Math.max(1, Math.min(1000, val));
+            $(this).val(settings.npcMinorWords); // update display with clamped value
             if (settings.routerModules?.npc) {
                 settings.routerModules.npc.instruction = buildNpcInstruction(settings.npcMajorWords, settings.npcMinorWords, settings.ignoreNpcImportLimits);
             }

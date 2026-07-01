@@ -316,20 +316,22 @@ Rules:
 
     const userPrompt = contextParts.join('\n\n---\n\n');
 
-    const portraitSettings = {
-        connectionSource: s.portraitConnectionSource ?? 'default',
-        connectionProfileId: s.portraitConnectionProfileId || '',
-        completionPresetId: s.portraitCompletionPresetId || '',
-        ollamaUrl: s.portraitOllamaUrl || 'http://localhost:11434',
-        ollamaModel: s.portraitOllamaModel || '',
-        openaiUrl: s.portraitOpenaiUrl || '',
-        openaiKey: s.portraitOpenaiKey || '',
-        openaiModel: s.portraitOpenaiModel || '',
+    // NPC lorebook portrait prompts use the Lorebook Agent AI, not the portrait AI,
+    // since the lorebook agent has the relevant NPC context and connection configured.
+    const lorebookAiSettings = {
+        connectionSource: s.routerConnectionSource ?? 'default',
+        connectionProfileId: s.routerConnectionProfileId || '',
+        completionPresetId: s.routerCompletionPresetId || '',
+        ollamaUrl: s.routerOllamaUrl || 'http://localhost:11434',
+        ollamaModel: s.routerOllamaModel || '',
+        openaiUrl: s.routerOpenaiUrl || '',
+        openaiKey: s.routerOpenaiKey || '',
+        openaiModel: s.routerOpenaiModel || '',
         maxTokens: s.maxTokens,
         debugMode: s.debugMode,
     };
 
-    const result = await sendStateRequest(portraitSettings, systemPrompt, userPrompt);
+    const result = await sendStateRequest(lorebookAiSettings, systemPrompt, userPrompt);
     return (result || '').trim();
 }
 
