@@ -342,7 +342,7 @@ export async function runRouterPass(narrativeOutput, manualPrompt = null, custom
 
 
         // Extract Current Context (Time & Location)
-        const timeRegex = /([0-9]{1,2}:[0-9]{2}\s*[AP]M,\s*Day\s*[0-9]+)/i;
+        const timeRegex = /(\d{1,2}:\d{2}\s*(?:AM|PM)?,\s*(?:Day\s*\d+|\d{1,2}\/\d{1,2}\/\d{2,4}))/i;
         const narrativeTimeMatch = recentChatString.match(timeRegex);
         const memoTimeMatch = settings.currentMemo?.match(/\[TIME\]([\s\S]*?)\[\/TIME\]/i);
         const cleanMemoTime = memoTimeMatch ? extractCurrentTimeStr(memoTimeMatch[1]) : '';
@@ -1313,6 +1313,7 @@ async function applyAction(action, allBooks = {}, currentTime = '', breadcrumb =
     let changed = false;
     const errors = [];
     const allBookNames = Object.keys(allBooks);
+    const TIMESTAMP_REGEX = /(?:\[Day\s+\d+|\[\d{1,2}\/\d{1,2}\/\d{2,4})\b/i;
 
     const timePrefix = currentTime ? `[${currentTime}] ` : '';
 
@@ -1375,12 +1376,12 @@ async function applyAction(action, allBooks = {}, currentTime = '', breadcrumb =
         if (book?.entries?.[uid]) {
             // Strip [ID:] stamp from anywhere in the delta (model sometimes echoes it)
             let delta = (up.content || '').replace(/\[ID:[^\]]+\]\n?/gi, '').trim();
-            // Ensure each [Day X,...] timestamp begins on its own line (model sometimes chains them on one line)
-            delta = delta.replace(/(.)\s+(\[Day\s)/g, '$1\n$2');
+            // Ensure each [Day X,...] or [DD/MM/YY,...] timestamp begins on its own line
+            delta = delta.replace(/(.)\s+(\[(?:Day\s+\d+|\d{1,2}\/\d{1,2}\/\d{2,4}))/gi, '$1\n$2');
             // Append delta to the existing chronicle
             const existing = (book.entries[uid].content || '').replace(/^\[ID:[^\]]+\]\n?/i, '').trimEnd();
             delta = deduplicateContent(existing, delta);
-            if (delta && timePrefix && !delta.includes('[Day')) {
+            if (delta && timePrefix && !TIMESTAMP_REGEX.test(delta)) {
                 delta = timePrefix.trim() + ' ' + delta;
             }
             book.entries[uid].content = existing && delta ? `${existing}\n${delta}` : (existing || delta);
@@ -1513,18 +1514,18 @@ async function applyAction(action, allBooks = {}, currentTime = '', breadcrumb =
         const isWorld = targetBook.toLowerCase().endsWith('_world') || targetBook.toLowerCase() === 'world';
 
         if (cat.includes('EVENT')) {
-            if (currentTime && !rec.label.includes('[Day')) {
+            if (currentTime && !TIMESTAMP_REGEX.test(rec.label)) {
                 rec.label = `[${currentTime}] ${rec.label}`;
             }
         }
 
         if (isWorld) {
-            if (rec.label && !rec.content.includes('[Day') && !rec.content.startsWith('[')) {
+            if (rec.label && !TIMESTAMP_REGEX.test(rec.content) && !rec.content.startsWith('[')) {
                 rec.content = `[${rec.label}] ` + rec.content;
             }
             rec.keys = [];
         } else {
-            if (timePrefix && !rec.content.includes('[Day')) {
+            if (timePrefix && !TIMESTAMP_REGEX.test(rec.content)) {
                 rec.content = timePrefix + rec.content;
             }
             // Add location hierarchy keywords (plain fragments, no 'In:' prefix)
@@ -1600,8 +1601,8 @@ async function applyAction(action, allBooks = {}, currentTime = '', breadcrumb =
                 } else {
                     // Append delta to existing chronicle (dedup path)
                     const existing = (bookData.entries[existingUid].content || '').replace(/^\[ID:[^\]]+\]\n?/i, '').trimEnd();
-                    // Ensure each [Day X,...] timestamp begins on its own line
-                    delta = delta.replace(/(.)\s+(\[Day\s)/g, '$1\n$2');
+                    // Ensure each [Day X,...] or [DD/MM/YY,...] timestamp begins on its own line
+                    delta = delta.replace(/(.)\s+(\[(?:Day\s+\d+|\d{1,2}\/\d{1,2}\/\d{2,4}))/gi, '$1\n$2');
                     delta = deduplicateContent(existing, delta);
                     bookData.entries[existingUid].content = existing && delta ? `${existing}\n${delta}` : (existing || delta);
 

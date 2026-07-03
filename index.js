@@ -2,7 +2,7 @@ import { EXAMPLES, COLOR_EXAMPLES, DEFAULT_STOCK_PROMPTS, RT_PROMPTS, BLOCK_ICON
 import { MODULE_NAME, DEFAULT_MODULES, getSettings, getBarBackground, migrateCustomFields, saveChatState, saveProfile, deleteProfile, getEffectiveRouterCampaignPrefix, sanitizeCampaignPrefixString, buildNpcInstruction } from './state-manager.js';
 import { sendStateRequest, fetchOllamaModels, fetchOpenAIModels, testOpenAIConnection, getConnectionProfiles, getCurrentCompletionPreset, setCompletionPreset } from './llm-client.js';
 import { getDiceToolName, getDiceCommandName, getDiceCommandAliases, doDiceRoll, registerDiceFunctionTool, registerDiceSlashCommand, installInterceptor, getNarrativeBlocks, onGenerationStarted, onGenerationEnded, ensureRelTagRegex, resetRouterTick, getRouterTick, makeRngQueue, buildRngBlock, RNG_QUEUE_LEN, parseAndApplyNarrativeRelTags } from './narrative-hooks.js';
-import { deduplicateMemo, mergeMemo, computeDelta, escapeHtml, escapeRegex, highlightParens, cleanToolCallMessage, cleanMessageContent, getLastUserAction, buildLorebookContext, buildModulesInstructionText, buildModuleFormatInstruction, parseQuestsFromMemo, syncQuestsFromMemo, syncQuestsToMemo, writeQuestsToMemo, getQuestMood, extractCurrentTimeStr, stripCompletedQuestsFromMemo, parseInWorldTime } from './memo-processor.js';
+import { deduplicateMemo, mergeMemo, computeDelta, escapeHtml, escapeRegex, highlightParens, cleanToolCallMessage, cleanMessageContent, getLastUserAction, buildLorebookContext, buildModulesInstructionText, buildModuleFormatInstruction, parseQuestsFromMemo, syncQuestsFromMemo, syncQuestsToMemo, writeQuestsToMemo, getQuestMood, extractCurrentTimeStr, stripCompletedQuestsFromMemo, parseInWorldTime, formatInWorldTime } from './memo-processor.js';
 import { renderSubFieldByRule, tryRenderMarker, renderCustomBlockLine, stripMemoHtml, escapeHtmlWithColor, parseMemoBlocks, getPageSize, loadCollapsed, saveCollapsed, loadDetached, saveDetached, blockToItems, renderMemoAsCards, renderQuestLog, renderLorebookTerminal } from './renderer.js';
 import { registerLogQuestTool, checkQuestDeadlines, renderQuestsAsPlainText } from './quests.js';
 import { initializeDebugViewer, toggleDebugViewer } from './debug-viewer.js';
@@ -462,6 +462,21 @@ function syncOnboardingUI() {
     // Custom Sysprompt Sync
     const customSyspromptCb = /** @type {HTMLInputElement|null} */ (onboarding.querySelector('#rt_onboarding_custom_sysprompt'));
     if (customSyspromptCb) customSyspromptCb.checked = !!s.customSysprompt;
+
+    // Time & Date format + Initial date/day Sync
+    const timeDdMmyy = /** @type {HTMLInputElement|null} */ (onboarding.querySelector('#rt_onboarding_time_ddmmyy'));
+    if (timeDdMmyy) {
+        timeDdMmyy.checked = !!s.useDdMmYyFormat;
+    }
+    const initialDateInput = /** @type {HTMLInputElement|null} */ (onboarding.querySelector('#rt_onboarding_initial_date_input'));
+    const initialDateLabel = /** @type {HTMLElement|null} */ (onboarding.querySelector('#rt_onboarding_initial_date_label'));
+    if (initialDateInput) {
+        initialDateInput.value = s.initialDate || (s.useDdMmYyFormat ? '01/01/26' : 'Day 1');
+        if (initialDateLabel) {
+            initialDateLabel.textContent = s.useDdMmYyFormat ? 'Initial Date:' : 'Initial Day:';
+        }
+        initialDateInput.placeholder = s.useDdMmYyFormat ? '01/01/26' : 'Day 1';
+    }
 }
 // ── Renderer / navigation state ──
 let _historyViewIndex = -1;    // -1 = live, 0 = most recent snapshot, higher = older
@@ -956,19 +971,7 @@ function loadChatState(chatId) {
     // Sync World Progression timing readouts for this chat
     {
         function _fmtWpMins(totalMins) {
-            if (totalMins < 0) return 'Never';
-            const day = Math.floor(totalMins / 1440) + 1;
-            const remMinutes = totalMins % 1440;
-            const h24 = Math.floor(remMinutes / 60);
-            const m = remMinutes % 60;
-            if (s.use24hTime) {
-                return `Day ${day}, ${String(h24).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-            } else {
-                const suffix = h24 >= 12 ? 'PM' : 'AM';
-                let h12 = h24 % 12;
-                if (h12 === 0) h12 = 12;
-                return `Day ${day}, ${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${suffix}`;
-            }
+            return formatInWorldTime(totalMins);
         }
         const mins = s.worldProgressionLastFiredAtMinutes ?? -1;
         const label = s.worldProgressionLastFiredPeriodLabel || '';
@@ -2001,6 +2004,19 @@ async function runStateModelPass(narrativeOutput, isFullContext = false, overrid
 
         const modulesText = buildModulesInstructionText(settings);
         let systemPrompt = settings.systemPromptTemplate.replace('{{modulesText}}', modulesText);
+        if (settings.useDdMmYyFormat) {
+            systemPrompt = systemPrompt
+                .replace(/\[Day\s+X,\s+HH:MM\]/g, '[DD/MM/YY, HH:MM]')
+                .replace(/Day\s+3,\s+14:00/g, '03/01/26, 14:00')
+                .replace(/Day\s+1,\s+11:52/g, '01/01/26, 11:52')
+                .replace(/Day\s+1/g, '01/01/26')
+                .replace(/Day\s+2/g, '02/01/26')
+                .replace(/Day\s+3/g, '03/01/26')
+                .replace(/Day\s+4/g, '04/01/26')
+                .replace(/Day\s+6/g, '06/01/26')
+                .replace(/Day\s+N/g, 'DD/MM/YY')
+                .replace(/Day\s+X/g, 'DD/MM/YY');
+        }
         if (isFullContext) {
             systemPrompt = systemPrompt
                 .replace(/Only output sections that actually changed/gi, 'Perform a full audit of the narrative history and output the COMPLETE state for all enabled modules')
@@ -2265,7 +2281,20 @@ async function sendDirectPrompt(message) {
         const worldLoreSection = worldLore ? worldLore + '\n\n' : '';
 
         const modulesText = buildModulesInstructionText(settings);
-        const systemPrompt = settings.systemPromptTemplate.replace('{{modulesText}}', modulesText);
+        let systemPrompt = settings.systemPromptTemplate.replace('{{modulesText}}', modulesText);
+        if (settings.useDdMmYyFormat) {
+            systemPrompt = systemPrompt
+                .replace(/\[Day\s+X,\s+HH:MM\]/g, '[DD/MM/YY, HH:MM]')
+                .replace(/Day\s+3,\s+14:00/g, '03/01/26, 14:00')
+                .replace(/Day\s+1,\s+11:52/g, '01/01/26, 11:52')
+                .replace(/Day\s+1/g, '01/01/26')
+                .replace(/Day\s+2/g, '02/01/26')
+                .replace(/Day\s+3/g, '03/01/26')
+                .replace(/Day\s+4/g, '04/01/26')
+                .replace(/Day\s+6/g, '06/01/26')
+                .replace(/Day\s+N/g, 'DD/MM/YY')
+                .replace(/Day\s+X/g, 'DD/MM/YY');
+        }
 
         const sanitizedCurrent = stripMemoHtml(settings.currentMemo.replace(/<\/?memo>/gi, '').trim());
 
@@ -2818,10 +2847,14 @@ Gear: Weapon (stats), AC: Z (Armor Name)
 Attr: STR X (mod), DEX X (mod), CON X (mod), INT X (mod), WIS X (mod), CHA X (mod)
 Saves: Fort +X | Ref +X | Will +X`;
 
+            const initDateVal = getSettings().initialDate || (getSettings().useDdMmYyFormat ? '01/01/26' : 'Day 1');
+            const initRestVal = getSettings().useDdMmYyFormat ? '01/01/26' : 'Day 0';
+            const TIME_FORMAT_HINT = ` Also output a [TIME] block initialized with Current Time at "08:00 AM, ${initDateVal}" and Last Rest at "12:00 AM, ${initRestVal}".`;
+
             const prompts = {
-                magic: `Generate a random Level ${level} D&D Magic User (Wizard, Sorcerer, or Warlock). Give them a random fantasy name (do NOT use {{user}}). Output [CHARACTER], [SPELLS], [INVENTORY], and [ABILITIES] blocks. Include appropriate spells (using 'Cantrips:' for level 0 spells), items, and attributes consistent with Level ${level}.${CHARACTER_FORMAT_HINT}`,
-                melee: `Generate a random Level ${level} D&D Melee Fighter (Fighter, Barbarian, or Paladin). Give them a random fantasy name (do NOT use {{user}}). Output [CHARACTER], [INVENTORY], and [ABILITIES] blocks. Focus on high physical attributes, heavy armor, and signature weapons consistent with Level ${level}.${CHARACTER_FORMAT_HINT}`,
-                rogue: `Generate a random Level ${level} D&D Rogue or Thief-style character. Give them a random fantasy name (do NOT use {{user}}). Output [CHARACTER], [INVENTORY], and [ABILITIES] blocks. Focus on high Dexterity, stealth-related equipment (thieves' tools, daggers), and class features like Sneak Attack consistent with Level ${level}.${CHARACTER_FORMAT_HINT}`
+                magic: `Generate a random Level ${level} D&D Magic User (Wizard, Sorcerer, or Warlock). Give them a random fantasy name (do NOT use {{user}}). Output [CHARACTER], [SPELLS], [INVENTORY], [ABILITIES], and [TIME] blocks. Include appropriate spells (using 'Cantrips:' for level 0 spells), items, and attributes consistent with Level ${level}.${CHARACTER_FORMAT_HINT}${TIME_FORMAT_HINT}`,
+                melee: `Generate a random Level ${level} D&D Melee Fighter (Fighter, Barbarian, or Paladin). Give them a random fantasy name (do NOT use {{user}}). Output [CHARACTER], [INVENTORY], [ABILITIES], and [TIME] blocks. Focus on high physical attributes, heavy armor, and signature weapons consistent with Level ${level}.${CHARACTER_FORMAT_HINT}${TIME_FORMAT_HINT}`,
+                rogue: `Generate a random Level ${level} D&D Rogue or Thief-style character. Give them a random fantasy name (do NOT use {{user}}). Output [CHARACTER], [INVENTORY], [ABILITIES], and [TIME] blocks. Focus on high Dexterity, stealth-related equipment (thieves' tools, daggers), and class features like Sneak Attack consistent with Level ${level}.${CHARACTER_FORMAT_HINT}${TIME_FORMAT_HINT}`
             };
 
             // ── Persona archetype: derive character from the active SillyTavern persona ──
@@ -2837,7 +2870,7 @@ Saves: Fort +X | Ref +X | Will +X`;
                 }
                 el.querySelectorAll('.rt-random-char-btn').forEach(b => b.disabled = true);
                 btn.textContent = labels.persona;
-                const personaPrompt = `Using the following persona description as the basis for the player character, create a Level ${level} D&D character that faithfully embodies this persona. Translate the personality, background, and traits into appropriate D&D stats, class, race, and equipment. Output [CHARACTER], [INVENTORY], and [ABILITIES] blocks (and [SPELLS] if the class is a spellcaster, using 'Cantrips:' for level 0 spells). All attributes and gear should be consistent with Level ${level}.${CHARACTER_FORMAT_HINT}\n\nPersona:\n${resolvedPersona}`;
+                const personaPrompt = `Using the following persona description as the basis for the player character, create a Level ${level} D&D character that faithfully embodies this persona. Translate the personality, background, and traits into appropriate D&D stats, class, race, and equipment. Output [CHARACTER], [INVENTORY], [ABILITIES], and [TIME] blocks (and [SPELLS] if the class is a spellcaster, using 'Cantrips:' for level 0 spells). All attributes and gear should be consistent with Level ${level}.${CHARACTER_FORMAT_HINT}${TIME_FORMAT_HINT}\n\nPersona:\n${resolvedPersona}`;
                 await sendDirectPrompt(personaPrompt);
                 return;
             }
@@ -2932,6 +2965,8 @@ Saves: Fort +X | Ref +X | Will +X`;
         // Custom Sysprompt
         const customSyspromptEl = /** @type {HTMLInputElement|null} */ (document.getElementById('rpg_tracker_custom_sysprompt'));
         if (customSyspromptEl) customSyspromptEl.checked = !!fresh.customSysprompt;
+        const timeDdMmyyCb = /** @type {HTMLInputElement|null} */ (document.getElementById('rpg_time_ddmmyy_toggle'));
+        if (timeDdMmyyCb) timeDdMmyyCb.checked = !!fresh.useDdMmYyFormat;
         const narratorBlockEl = document.getElementById('rpg_narrator_config_block');
         if (narratorBlockEl) narratorBlockEl.style.display = !!fresh.customSysprompt ? 'none' : '';
 
@@ -3105,6 +3140,36 @@ Saves: Fort +X | Ref +X | Will +X`;
         onboardingCustomSyspromptCb.checked = !!getSettings().customSysprompt;
         onboardingCustomSyspromptCb.addEventListener('change', () => {
             syncSettingsAndUI(s => { s.customSysprompt = !!onboardingCustomSyspromptCb.checked; });
+        });
+    }
+
+    // Time & Date format + Initial date/day (onboarding)
+    const onboardingTimeDdMmyyCb = el.querySelector('#rt_onboarding_time_ddmmyy');
+    if (onboardingTimeDdMmyyCb) {
+        onboardingTimeDdMmyyCb.addEventListener('change', () => {
+            const isChecked = !!onboardingTimeDdMmyyCb.checked;
+            syncSettingsAndUI(settings => {
+                settings.useDdMmYyFormat = isChecked;
+                if (isChecked && settings.initialDate === "Day 1") {
+                    settings.initialDate = "01/01/26";
+                } else if (!isChecked && settings.initialDate === "01/01/26") {
+                    settings.initialDate = "Day 1";
+                }
+                if (settings.routerModules?.npc) {
+                    settings.routerModules.npc.instruction = buildNpcInstruction(settings.npcMajorWords, settings.npcMinorWords, false);
+                }
+            });
+            syncOnboardingUI();
+        });
+    }
+    const onboardingInitialDateInput = el.querySelector('#rt_onboarding_initial_date_input');
+    if (onboardingInitialDateInput) {
+        onboardingInitialDateInput.addEventListener('input', () => {
+            const val = onboardingInitialDateInput.value.trim();
+            if (val) {
+                getSettings().initialDate = val;
+                saveSettings();
+            }
         });
     }
 
@@ -4130,17 +4195,7 @@ function createPanel() {
             const wpLabel = wpS.worldProgressionLastFiredPeriodLabel || '';
             const wpIntervalMins = (wpS.worldProgressionIntervalHours || 24) * 60;
             function _fmtWP(m) {
-                if (m < 0) return 'Never';
-                const day = Math.floor(m / 1440) + 1;
-                const rem = m % 1440;
-                const h24 = Math.floor(rem / 60), min = rem % 60;
-                if (wpS.use24hTime) {
-                    return `Day ${day}, ${String(h24).padStart(2,'0')}:${String(min).padStart(2,'0')}`;
-                } else {
-                    const suffix = h24 >= 12 ? 'PM' : 'AM';
-                    let h12 = h24 % 12; if (h12 === 0) h12 = 12;
-                    return `Day ${day}, ${String(h12).padStart(2,'0')}:${String(min).padStart(2,'0')} ${suffix}`;
-                }
+                return formatInWorldTime(m);
             }
             const wpLastEl = agentPanel.querySelector('#rt-agent-world-last-fired');
             const wpNextEl = agentPanel.querySelector('#rt-agent-world-next-fire');
@@ -4456,17 +4511,7 @@ function createPanel() {
             const intervalHours = s.worldProgressionIntervalHours || 24;
             const intervalMins = intervalHours * 60;
             function fmtWP(m) {
-                if (m < 0) return 'Never';
-                const day = Math.floor(m / 1440) + 1;
-                const rem = m % 1440;
-                const h24 = Math.floor(rem / 60), min = rem % 60;
-                if (s.use24hTime) {
-                    return `Day ${day}, ${String(h24).padStart(2,'0')}:${String(min).padStart(2,'0')}`;
-                } else {
-                    const suffix = h24 >= 12 ? 'PM' : 'AM';
-                    let h12 = h24 % 12; if (h12 === 0) h12 = 12;
-                    return `Day ${day}, ${String(h12).padStart(2,'0')}:${String(min).padStart(2,'0')} ${suffix}`;
-                }
+                return formatInWorldTime(m);
             }
             const lastEl = agentPanel.querySelector('#rt-agent-world-last-fired');
             const nextEl = agentPanel.querySelector('#rt-agent-world-next-fire');
@@ -5774,6 +5819,23 @@ function createPanel() {
                         const isEventsBook = bookNameLower.includes('events') || bookNameLower.includes('event');
                         
                         if (isEventsBook) {
+                            // Check for DD/MM/YY
+                            const dateRegex = /\[([^\]]*\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b[^\]]*)\](.*)/i;
+                            const dateMatch = item.label.match(dateRegex);
+                            if (dateMatch) {
+                                const dd = dateMatch[2].padStart(2, '0');
+                                const mm = dateMatch[3].padStart(2, '0');
+                                let yy = dateMatch[4];
+                                if (yy.length === 2) yy = '20' + yy;
+                                const dateStr = `${dd}/${mm}/${yy.slice(-2)}`;
+                                let bracketContent = dateMatch[1]
+                                    .replace(new RegExp(`(?:,\\s*)?${dateMatch[2]}\\/${dateMatch[3]}\\/${dateMatch[4]}(?:\\s*,)?`, 'i'), '')
+                                    .trim();
+                                const title = dateMatch[5].trim();
+                                const cleanLabel = bracketContent ? `[${bracketContent}] ${title}` : title;
+                                return [dateStr, cleanLabel];
+                            }
+
                             // Check for "[10:40 AM, Day 2] The Uprising" or similar patterns containing Day/D and numbers
                             const dayRegex = /\[([^\]]*(?:Day|D)\s*(\d+)[^\]]*)\](.*)/i;
                             const match = item.label.match(dayRegex);
@@ -5804,6 +5866,25 @@ function createPanel() {
                             }
                             if (aDayMatch) return -1;
                             if (bDayMatch) return 1;
+
+                            // Check if keys start with DD/MM/YY
+                            const aDateMatch = a.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+                            const bDateMatch = b.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+                            if (aDateMatch && bDateMatch) {
+                                const aD = parseInt(aDateMatch[1], 10);
+                                const aM = parseInt(aDateMatch[2], 10);
+                                let aY = parseInt(aDateMatch[3], 10);
+                                if (aY < 100) aY += 2000;
+                                const bD = parseInt(bDateMatch[1], 10);
+                                const bM = parseInt(bDateMatch[2], 10);
+                                let bY = parseInt(bDateMatch[3], 10);
+                                if (bY < 100) bY += 2000;
+                                const aTime = new Date(aY, aM - 1, aD).getTime();
+                                const bTime = new Date(bY, bM - 1, bD).getTime();
+                                return aTime - bTime;
+                            }
+                            if (aDateMatch) return -1;
+                            if (bDateMatch) return 1;
 
                             // Check if keys start with a time bracket like "[10:40 AM]"
                             const timeRegex = /^\[(\d{1,2}):(\d{2})\s*(AM|PM)?\]/i;
@@ -5884,7 +5965,7 @@ function createPanel() {
                         // Status dot
                         const bookNameLower = (bookName || '').toLowerCase();
                         const isEventsBook = bookNameLower.includes('events') || bookNameLower.includes('event');
-                        const isDayNode = isEventsBook && /^Day\s+\d+$/i.test(node.name);
+                        const isDayNode = isEventsBook && (/^Day\s+\d+$/i.test(node.name) || /^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(node.name));
 
                         let statusDotHtml = '';
                         if (node.item) {
@@ -9436,7 +9517,7 @@ function refreshOrderList() {
         item.appendChild(cb);
         item.appendChild(label);
 
-        // TIME-specific: inline 24h clock toggle
+        // TIME-specific: inline 24h clock toggle and DD/MM/YY format toggle
         if (tag === 'TIME' && isStock) {
             const pill = document.createElement('label');
             pill.title = 'Toggle between 12-hour (AM/PM) and 24-hour time format for the [TIME] module prompt and all time displays.';
@@ -9462,6 +9543,41 @@ function refreshOrderList() {
             pill.appendChild(cb24h);
             pill.appendChild(lbl24h);
             item.appendChild(pill);
+
+            const pillDate = document.createElement('label');
+            pillDate.title = 'Toggle between [Day X] and [DD/MM/YY] date format for the time displays and prompts.';
+            pillDate.style.cssText = 'display:inline-flex; align-items:center; gap:4px; font-size:10px; opacity:0.8; cursor:pointer; user-select:none; margin-right:4px; white-space:nowrap;';
+
+            const cbDate = document.createElement('input');
+            cbDate.id = 'rpg_time_ddmmyy_toggle';
+            cbDate.type = 'checkbox';
+            cbDate.checked = !!s.useDdMmYyFormat;
+            cbDate.style.cssText = 'margin:0; cursor:pointer;';
+            cbDate.onchange = () => {
+                const fresh = getSettings();
+                fresh.useDdMmYyFormat = cbDate.checked;
+                if (cbDate.checked && fresh.initialDate === "Day 1") {
+                    fresh.initialDate = "01/01/26";
+                } else if (!cbDate.checked && fresh.initialDate === "01/01/26") {
+                    fresh.initialDate = "Day 1";
+                }
+                if (fresh.routerModules?.npc) {
+                    fresh.routerModules.npc.instruction = buildNpcInstruction(fresh.npcMajorWords, fresh.npcMinorWords, false);
+                }
+                saveSettings();
+                if (typeof updateWorldProgressionLastFiredDisplayRef === 'function') {
+                    updateWorldProgressionLastFiredDisplayRef();
+                }
+                syncOnboardingUI();
+                scheduleAutoApply();
+            };
+
+            const lblDate = document.createElement('span');
+            lblDate.textContent = 'DD/MM/YY';
+
+            pillDate.appendChild(cbDate);
+            pillDate.appendChild(lblDate);
+            item.appendChild(pillDate);
         }
 
         btnGroup.appendChild(editBtn);
@@ -12739,19 +12855,7 @@ RULES:
             const mins = s.worldProgressionLastFiredAtMinutes ?? -1;
 
             function formatInWorldMinutes(totalMins) {
-                if (totalMins < 0) return 'Never';
-                const day = Math.floor(totalMins / 1440) + 1;
-                const remMinutes = totalMins % 1440;
-                const h24 = Math.floor(remMinutes / 60);
-                const m = remMinutes % 60;
-                if (s.use24hTime) {
-                    return `Day ${day}, ${String(h24).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-                } else {
-                    const suffix = h24 >= 12 ? 'PM' : 'AM';
-                    let h12 = h24 % 12;
-                    if (h12 === 0) h12 = 12;
-                    return `Day ${day}, ${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${suffix}`;
-                }
+                return formatInWorldTime(totalMins);
             }
 
             let lastReportText = 'Never';
@@ -12969,31 +13073,26 @@ RULES:
             const currentNextMins = currentLastMins >= 0 ? currentLastMins + intervalMinutes : intervalMinutes;
 
             function fmtHint(totalMins) {
-                if (totalMins < 0) return s.use24hTime ? 'Day 1, 00:00' : 'Day 1, 12:00 AM';
-                const day = Math.floor(totalMins / 1440) + 1;
-                const remMinutes = totalMins % 1440;
-                const h24 = Math.floor(remMinutes / 60);
-                const m = remMinutes % 60;
-                if (s.use24hTime) {
-                    return `Day ${day}, ${String(h24).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-                } else {
-                    const suffix = h24 >= 12 ? 'PM' : 'AM';
-                    let h12 = h24 % 12;
-                    if (h12 === 0) h12 = 12;
-                    return `Day ${day}, ${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${suffix}`;
-                }
+                if (totalMins < 0) return s.useDdMmYyFormat ? '01/01/26, 08:00 AM' : (s.use24hTime ? 'Day 1, 00:00' : 'Day 1, 12:00 AM');
+                return formatInWorldTime(totalMins);
             }
 
+            const acceptedFormats = s.useDdMmYyFormat
+                ? 'Accepted formats: "06/01/26, 08:00 AM", "06/01/26, 08:00", "06/01/26"'
+                : 'Accepted formats: "Day 6, 08:00 AM", "Day 6, 08:00", "Day 6"';
+
             const userInput = window.prompt(
-                'Enter the in-world time for the NEXT report.\n' +
-                'Accepted formats: "Day 6, 08:00 AM", "Day 6, 08:00", "Day 6"',
+                'Enter the in-world time for the NEXT report.\n' + acceptedFormats,
                 fmtHint(currentNextMins)
             );
             if (userInput === null) return; // cancelled
 
             const parsedNextMins = parseInWorldTime(userInput.trim());
             if (parsedNextMins <= 0) {
-                toastr['warning']('Could not parse the entered time. Please use a format like "Day 6, 08:00 AM".', 'World Progression');
+                const errorFormat = s.useDdMmYyFormat
+                    ? 'Could not parse the entered time. Please use a format like "06/01/26, 08:00 AM".'
+                    : 'Could not parse the entered time. Please use a format like "Day 6, 08:00 AM".';
+                toastr['warning'](errorFormat, 'World Progression');
                 return;
             }
 

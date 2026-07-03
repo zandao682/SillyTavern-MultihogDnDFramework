@@ -1314,6 +1314,20 @@ function formatValueToCurrency(totalCp, detectedCurrency) {
                         </div>
                     </div>
 
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 2px;">
+                        <span style="font-size: 0.85em; font-weight: bold; opacity: 0.8;">Time & Date</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; padding-left: 5px;">
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input type="checkbox" id="rt_onboarding_time_ddmmyy" />
+                            <span>Use DD/MM/YY Format</span>
+                        </label>
+                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 2px;">
+                            <span id="rt_onboarding_initial_date_label" style="font-size: 0.8em; opacity: 0.75;">Initial Day:</span>
+                            <input type="text" id="rt_onboarding_initial_date_input" placeholder="Day 1" style="width: 100px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.15); color: var(--rt-text, #eee); font-size: 0.85em; padding: 2px 6px; border-radius: 4px;" />
+                        </div>
+                    </div>
+
                     <div style="font-size: 0.85em; font-weight: bold; opacity: 0.8; margin-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 2px;">Optional Components</div>
                     <div style="display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; padding-left: 5px;">
                         <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">

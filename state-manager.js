@@ -21,10 +21,15 @@ export const MODULE_NAME = 'rpg_tracker';
  * @returns {string}
  */
 export function buildNpcInstruction(majorWords = 25, minorWords = 15, ignoreLimits = false) {
+    let useDdMmYy = false;
+    try {
+        useDdMmYy = !!getSettings().useDdMmYyFormat;
+    } catch (_) {}
+
     let instruction = `Significant named characters the party interacts with (do NOT record every random enemy or nameless bartender, only characters who are somehow significant). Do NOT create an entry for {{user}}. Mention {{user}} in EVENT or QUEST entries as needed. Always use the exact macro string \`{{user}}\` when referring to the player; do NOT write the plain word "user" or "player".
 
 <CORE_FORMAT>
-IMPORTANT: The Description field inside the [[ ]] tags MUST start directly with the [CORE] tag. Do NOT prepend any timestamps, dates, or other text before the [CORE] tag under any circumstances (e.g. do NOT write "[4:47 PM, Day 1] [CORE]" or "[Day X, HH:MM] [CORE]"). The very first character of the Description MUST be the "[" of the "[CORE]" tag. Wrap the immutable identity sections (Appearance/Species, Personality, Brief Background, Habits/Behaviors) inside a single \`[CORE]\` and \`[/CORE]\` tag block. These sections are permanent — once written they must NOT be rewritten, overwritten, or updated through normal entry update/record operations.
+IMPORTANT: The Description field inside the [[ ]] tags MUST start directly with the [CORE] tag. Do NOT prepend any timestamps, dates, or other text before the [CORE] tag under any circumstances (e.g. do NOT write "[4:47 PM, ${useDdMmYy ? '01/01/26' : 'Day 1'}] [CORE]" or "[${useDdMmYy ? 'DD/MM/YY' : 'Day X'}, HH:MM] [CORE]"). The very first character of the Description MUST be the "[" of the "[CORE]" tag. Wrap the immutable identity sections (Appearance/Species, Personality, Brief Background, Habits/Behaviors) inside a single \`[CORE]\` and \`[/CORE]\` tag block. These sections are permanent — once written they must NOT be rewritten, overwritten, or updated through normal entry update/record operations.
 
 [CORE]
 Appearance/Species: Visual identifiers — species/race, build, distinctive features, weapon/armor if relevant.
@@ -33,9 +38,8 @@ Brief Background: Role in the world, why they matter to the story.
 Habits/Behaviors: Defining behaviors or combat tendencies.
 [/CORE]
 
-After the [/CORE] block, append timestamped narrative updates as usual ([Day X, HH:MM] ...).
+After the [/CORE] block, append timestamped narrative updates as usual ([${useDdMmYy ? 'DD/MM/YY' : 'Day X'}, HH:MM] ...).
 </CORE_FORMAT>
-
 ## APPEARANCE UPDATES
 If the NPC's physical appearance changes significantly (major injury, permanent outfit change, etc.), output:
   [[UPDATE_APPEARANCE: Book::UID | New appearance text]]
@@ -140,6 +144,8 @@ export function getSettings() {
         experimentalNpcImport: true,
         ignoreNpcImportLimits: false,
         use24hTime: false,
+        useDdMmYyFormat: false,
+        initialDate: "Day 1",
         barColors: {},
         modulePageSizes: {},
         customTheme: null,

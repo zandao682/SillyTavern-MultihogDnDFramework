@@ -116,8 +116,8 @@ export function extractCurrentTimeStr(timeBlockContent) {
 }
 
 /**
- * Converts in-world time strings to a comparable numeric value (minutes since Day 1, 00:00).
- * Expected formats: "08:00 AM, Day 1", "Day 4", "10:00 PM"
+ * Converts in-world time strings to a comparable numeric value (minutes since Day 1/epoch date, 00:00).
+ * Expected formats: "08:00 AM, Day 1", "08:00 AM, 01/01/26", "Day 4", "10:00 PM"
  * @param {string} str 
  * @returns {number}
  */
@@ -126,12 +126,25 @@ export function parseInWorldTime(str) {
     if (str.includes('\n')) {
         str = extractCurrentTimeStr(str);
     }
+    const ddmmyyMatch = str.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/);
     const dayMatch = str.match(/(?:Day|D)\s*(\d+)/i);
     const timeMatch = str.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
     
-    let d = dayMatch ? parseInt(dayMatch[1], 10) : 1;
-    let h = 0, m = 0;
+    let d = 1;
+    if (ddmmyyMatch) {
+        const dd = parseInt(ddmmyyMatch[1], 10);
+        const mm = parseInt(ddmmyyMatch[2], 10);
+        let yy = parseInt(ddmmyyMatch[3], 10);
+        if (yy < 100) yy += 2000;
+        const dateObj = new Date(yy, mm - 1, dd);
+        const epochObj = new Date(2026, 0, 1);
+        const diffDays = Math.round((dateObj - epochObj) / (1000 * 60 * 60 * 24));
+        d = diffDays + 1;
+    } else if (dayMatch) {
+        d = parseInt(dayMatch[1], 10);
+    }
     
+    let h = 0, m = 0;
     if (timeMatch) {
         h = parseInt(timeMatch[1], 10);
         m = parseInt(timeMatch[2], 10);
@@ -142,8 +155,48 @@ export function parseInWorldTime(str) {
         }
     }
     
-    if (!dayMatch && !timeMatch) return 0;
+    if (!ddmmyyMatch && !dayMatch && !timeMatch) return 0;
     return (d - 1) * 1440 + h * 60 + m;
+}
+
+/**
+ * Formats in-world minutes since epoch into a readable string using active settings (12h/24h, Day/Date).
+ * @param {number} totalMins
+ * @returns {string}
+ */
+export function formatInWorldTime(totalMins) {
+    if (totalMins < 0) return 'Never';
+    const settings = getSettings();
+    const use24h = !!settings.use24hTime;
+    const useDdMmYy = !!settings.useDdMmYyFormat;
+
+    const dayIndex = Math.floor(totalMins / 1440) + 1;
+    const remMinutes = totalMins % 1440;
+    const h24 = Math.floor(remMinutes / 60);
+    const m = remMinutes % 60;
+
+    let dateStr = '';
+    if (useDdMmYy) {
+        const date = new Date(2026, 0, 1 + (dayIndex - 1));
+        const dd = String(date.getDate()).padStart(2, '0');
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const yy = String(date.getFullYear() % 100).padStart(2, '0');
+        dateStr = `${dd}/${mm}/${yy}`;
+    } else {
+        dateStr = `Day ${dayIndex}`;
+    }
+
+    let timeStr = '';
+    if (use24h) {
+        timeStr = `${String(h24).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    } else {
+        const suffix = h24 >= 12 ? 'PM' : 'AM';
+        let h12 = h24 % 12;
+        if (h12 === 0) h12 = 12;
+        timeStr = `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${suffix}`;
+    }
+
+    return `${dateStr}, ${timeStr}`;
 }
 
 
@@ -1010,9 +1063,9 @@ export function buildModulesInstructionText(settings) {
 
     modulesText += "### CORE MODULES\n";
     for (const [key, prompt] of Object.entries(promptsMap)) {
-        // Never emit the quests_legacy or time_24h keys as their own modules — they are data slots only
+        // Never emit the helper prompts as their own modules
         if (key === 'quests_legacy') continue;
-        if (key === 'time_24h') continue;
+        if (key === 'time_24h' || key === 'time_ddmmyy' || key === 'time_ddmmyy_24h') continue;
 
         if (key === 'quests' && settings.syspromptModules?.quests === false) continue;
         if (settings.modules[key]) {
@@ -1027,6 +1080,12 @@ export function buildModulesInstructionText(settings) {
                     const isDifficulty = !!settings.syspromptModules?.questsDifficulty;
                     // Use the dedicated legacy format prompt
                     p = (promptsMap['quests_legacy'] || DEFAULT_STOCK_PROMPTS.quests_legacy);
+                    if (settings.useDdMmYyFormat) {
+                        p = p
+                            .replace(/Day 1/g, '01/01/26')
+                            .replace(/Day 4/g, '04/01/26')
+                            .replace(/Day N/g, 'DD/MM/YY');
+                    }
                     if (!isDeadlines) p = p.replace(/\n\s*DEADLINE:.*?\n/g, '\n');
                     if (!isFrustration) p = p.replace(/\n\s*FRUSTRATION_COEFF:.*?\n/g, '\n');
                     if (!isDifficulty) {
@@ -1039,13 +1098,25 @@ export function buildModulesInstructionText(settings) {
                 }
             }
 
-            // ── Dynamic prompt swap for 24-hour Time Module ─────────────────
-            if (key === 'time' && settings.use24hTime) {
-                p = promptsMap['time_24h'] || DEFAULT_STOCK_PROMPTS.time_24h;
+            // ── Dynamic prompt swap for Time Module ─────────────────────────
+            if (key === 'time') {
+                if (settings.useDdMmYyFormat) {
+                    if (settings.use24hTime) {
+                        p = promptsMap['time_ddmmyy_24h'] || DEFAULT_STOCK_PROMPTS.time_ddmmyy_24h;
+                    } else {
+                        p = promptsMap['time_ddmmyy'] || DEFAULT_STOCK_PROMPTS.time_ddmmyy;
+                    }
+                } else if (settings.use24hTime) {
+                    p = promptsMap['time_24h'] || DEFAULT_STOCK_PROMPTS.time_24h;
+                }
             }
 
             modulesText += `- [${key.toUpperCase()}]: ${p}\n`;
         }
+    }
+
+    if (settings.initialDate) {
+        modulesText += `\n### CAMPAIGN TIMING RULES\n- The campaign starting date is ${settings.initialDate}. Ensure the very first [TIME] block and all early timeline entries align with this starting anchor.\n`;
     }
 
     const enabledCustomFields = (settings.customFields || []).filter(f => f.enabled && f.tag);
