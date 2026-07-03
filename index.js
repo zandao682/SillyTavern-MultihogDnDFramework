@@ -3063,7 +3063,7 @@ Saves: Fort +X | Ref +X | Will +X`;
             syncSettingsAndUI(settings => {
                 settings.npcRelationshipBars = !!onboardingRelBarsCb.checked;
                 if (settings.routerModules?.npc) {
-                    settings.routerModules.npc.instruction = buildNpcInstruction(settings.npcMajorWords, settings.npcMinorWords, settings.ignoreNpcImportLimits);
+                    settings.routerModules.npc.instruction = buildNpcInstruction(settings.npcMajorWords, settings.npcMinorWords, false);
                 }
             });
             setTimeout(() => {
@@ -9544,7 +9544,7 @@ function buildSysprompt(rawText) {
                         for (const [id, def] of Object.entries(DEFAULT_MODULES)) {
                             if (fresh.routerModules && fresh.routerModules[id]) {
                                 if (id === 'npc') {
-                                    fresh.routerModules[id].instruction = buildNpcInstruction(fresh.npcMajorWords, fresh.npcMinorWords, fresh.ignoreNpcImportLimits);
+                                    fresh.routerModules[id].instruction = buildNpcInstruction(fresh.npcMajorWords, fresh.npcMinorWords, false);
                                 } else {
                                     fresh.routerModules[id].instruction = def.instruction;
                                 }
@@ -9739,7 +9739,7 @@ function buildSysprompt(rawText) {
                                     for (const [id, def] of Object.entries(DEFAULT_MODULES)) {
                                         if (fresh.routerModules && fresh.routerModules[id]) {
                                             if (id === 'npc') {
-                                                fresh.routerModules[id].instruction = buildNpcInstruction(fresh.npcMajorWords, fresh.npcMinorWords, fresh.ignoreNpcImportLimits);
+                                                fresh.routerModules[id].instruction = buildNpcInstruction(fresh.npcMajorWords, fresh.npcMinorWords, false);
                                             } else {
                                                 fresh.routerModules[id].instruction = def.instruction;
                                             }
@@ -12336,7 +12336,7 @@ RULES:
             settings.npcMajorWords = Math.max(1, Math.min(1000, val));
             $(this).val(settings.npcMajorWords); // update display with clamped value
             if (settings.routerModules?.npc) {
-                settings.routerModules.npc.instruction = buildNpcInstruction(settings.npcMajorWords, settings.npcMinorWords, settings.ignoreNpcImportLimits);
+                settings.routerModules.npc.instruction = buildNpcInstruction(settings.npcMajorWords, settings.npcMinorWords, false);
             }
             saveSettings();
             if (typeof globalThis._rpgRenderAgentModules === 'function') {
@@ -12349,7 +12349,7 @@ RULES:
             settings.npcMinorWords = Math.max(1, Math.min(1000, val));
             $(this).val(settings.npcMinorWords); // update display with clamped value
             if (settings.routerModules?.npc) {
-                settings.routerModules.npc.instruction = buildNpcInstruction(settings.npcMajorWords, settings.npcMinorWords, settings.ignoreNpcImportLimits);
+                settings.routerModules.npc.instruction = buildNpcInstruction(settings.npcMajorWords, settings.npcMinorWords, false);
             }
             saveSettings();
             if (typeof globalThis._rpgRenderAgentModules === 'function') {
@@ -12365,7 +12365,7 @@ RULES:
             if (onbRel) onbRel.checked = val;
 
             if (settings.routerModules?.npc) {
-                settings.routerModules.npc.instruction = buildNpcInstruction(settings.npcMajorWords, settings.npcMinorWords, settings.ignoreNpcImportLimits);
+                settings.routerModules.npc.instruction = buildNpcInstruction(settings.npcMajorWords, settings.npcMinorWords, false);
             }
             saveSettings();
             scheduleAutoApply();
@@ -12391,7 +12391,7 @@ RULES:
         $('#rpg_tracker_ignore_npc_limits').prop('checked', !!settings.ignoreNpcImportLimits).on('change', function () {
             settings.ignoreNpcImportLimits = $(this).prop('checked');
             if (settings.routerModules?.npc) {
-                settings.routerModules.npc.instruction = buildNpcInstruction(settings.npcMajorWords, settings.npcMinorWords, settings.ignoreNpcImportLimits);
+                settings.routerModules.npc.instruction = buildNpcInstruction(settings.npcMajorWords, settings.npcMinorWords, false);
             }
 
             saveSettings();

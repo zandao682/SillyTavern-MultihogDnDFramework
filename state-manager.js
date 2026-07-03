@@ -715,7 +715,7 @@ Example: [[FAC: Iron Syndicate | ...]]  NOT  [[FAC: Khelt :: Iron Syndicate | ..
     // Reinforce that NPC Description must start directly with [CORE] without timestamp (v3.16.16)
     if (!s.settingsVersion || s.settingsVersion < '3.16.16') {
         if (s.routerModules?.npc) {
-            s.routerModules.npc.instruction = buildNpcInstruction(s.npcMajorWords, s.npcMinorWords, s.ignoreNpcImportLimits);
+            s.routerModules.npc.instruction = buildNpcInstruction(s.npcMajorWords, s.npcMinorWords, false);
         }
         s.settingsVersion = '3.16.16';
     }
@@ -723,7 +723,7 @@ Example: [[FAC: Iron Syndicate | ...]]  NOT  [[FAC: Khelt :: Iron Syndicate | ..
     // Move ongoing relationship tracking from lorebook agent to narrative AI direct parsing (v3.16.17)
     if (!s.settingsVersion || s.settingsVersion < '3.16.17') {
         if (s.routerModules?.npc) {
-            s.routerModules.npc.instruction = buildNpcInstruction(s.npcMajorWords, s.npcMinorWords, s.ignoreNpcImportLimits);
+            s.routerModules.npc.instruction = buildNpcInstruction(s.npcMajorWords, s.npcMinorWords, false);
         }
         s.settingsVersion = '3.16.17';
     }
