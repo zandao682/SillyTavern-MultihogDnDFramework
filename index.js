@@ -8133,7 +8133,13 @@ Rules:
             const rect = updateBtn.getBoundingClientRect();
             const panelRect = panel.getBoundingClientRect();
             updateMenu.style.top = (rect.bottom - panelRect.top + 5) + 'px';
-            updateMenu.style.right = (panelRect.right - rect.right) + 'px';
+            if (rect.right < 190) {
+                updateMenu.style.left = (rect.left - panelRect.left) + 'px';
+                updateMenu.style.right = 'auto';
+            } else {
+                updateMenu.style.right = (panelRect.right - rect.right) + 'px';
+                updateMenu.style.left = 'auto';
+            }
             updateMenu.style.display = 'flex';
 
             const closeMenu = () => {
