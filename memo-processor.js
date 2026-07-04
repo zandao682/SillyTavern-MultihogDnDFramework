@@ -549,35 +549,28 @@ export function writeQuestsToMemo(quests, memoText = null) {
     const pattern = new RegExp(`\\s*\\[${escapedTag}\\][\\s\\S]*?\\[\\/${escapedTag}\\]`, 'i');
     const blockExists = pattern.test(target);
 
-    // Separate active from completed
-    const activeQuests = quests.filter(q => q.status !== 'completed');
-    const completedQuests = quests.filter(q => q.status === 'completed' || q.status === 'failed');
+    // Filter out completed/failed quests to save AI context space
+    const activeQuests = quests.filter(q => q.status !== 'completed' && q.status !== 'failed');
 
-    // ── Active quests → [QUESTS] block (visible to AI) ──────────────────────
-    let result;
-    if (!activeQuests.length) {
-        // Remove active block if present
-        result = blockExists ? target.replace(pattern, '').trim() : target;
-    } else {
-        const content = settings.questLegacyMode
-            ? serializeQuestsToText(activeQuests)
-            : JSON.stringify(activeQuests, null, 2);
-        const block = `\n\n[${tag}]\n${content}\n[/${tag}]`;
-        result = blockExists ? target.replace(pattern, block) : (target + block).trim();
+    // If no active quests, remove the block if present — never insert an empty one
+    if (!activeQuests || !activeQuests.length) {
+        const result = blockExists ? target.replace(pattern, '').trim() : target;
+        if (memoText !== null) return result;
+        settings.currentMemo = result;
+        return;
     }
 
-    // ── Completed/failed quests → [QUESTS_ARCHIVE] block (hidden from AI, persists state) ──
-    const archiveTag = 'QUESTS_ARCHIVE';
-    const escapedArchiveTag = escapeRegex(archiveTag);
-    const archivePattern = new RegExp(`\\s*\\[${escapedArchiveTag}\\][\\s\\S]*?\\[\\/${escapedArchiveTag}\\]`, 'i');
-    const archiveExists = archivePattern.test(result);
-    if (completedQuests.length > 0) {
-        const archiveContent = JSON.stringify(completedQuests, null, 2);
-        const archiveBlock = `\n\n[${archiveTag}]\n${archiveContent}\n[/${archiveTag}]`;
-        result = archiveExists ? result.replace(archivePattern, archiveBlock) : (result + archiveBlock).trim();
-    } else if (archiveExists) {
-        // No completed quests — remove the archive block if present
-        result = result.replace(archivePattern, '').trim();
+    const content = settings.questLegacyMode
+        ? serializeQuestsToText(activeQuests)
+        : JSON.stringify(activeQuests, null, 2);
+
+    const block = `\n\n[${tag}]\n${content}\n[/${tag}]`;
+
+    let result;
+    if (blockExists) {
+        result = target.replace(pattern, block);
+    } else {
+        result = (target + block).trim();
     }
 
     if (memoText !== null) return result;
@@ -603,8 +596,6 @@ export function syncQuestsToMemo() {
  */
 export function stripCompletedQuestsFromMemo(memoText) {
     if (!memoText) return memoText;
-    // Always strip the hidden archive block — AI must never see it
-    memoText = memoText.replace(/\s*\[QUESTS_ARCHIVE\][\s\S]*?\[\/QUESTS_ARCHIVE\]/gi, '').trim();
     const questBlockRe = /\[QUESTS\]([\s\S]*?)\[\/QUESTS\]/i;
     const match = memoText.match(questBlockRe);
     if (!match) return memoText;
@@ -855,42 +846,32 @@ export function syncQuestsFromMemo(memoText) {
     }
 
     const quests = parseQuestsFromMemo(memoText);
+    const existingCompleted = (settings.quests || []).filter(q => q.status === 'completed' || q.status === 'failed');
 
-    // Also read archived (completed/failed) quests from the hidden [QUESTS_ARCHIVE] block.
-    // This block persists across sessions without exposing completed quests to the AI.
-    let archivedQuests = [];
-    const archiveMatch = (memoText || '').match(/\[QUESTS_ARCHIVE\]([\s\S]*?)\[\/QUESTS_ARCHIVE\]/i);
-    if (archiveMatch) {
-        try {
-            const parsed = JSON.parse(archiveMatch[1].trim());
-            archivedQuests = Array.isArray(parsed) ? parsed : [];
-        } catch (e) {
-            console.warn('[RPG Tracker] syncQuestsFromMemo: Failed to parse [QUESTS_ARCHIVE]:', e);
-        }
-    }
-
-    if (quests.length === 0 && archivedQuests.length === 0) {
-        const activeBlock = (memoText || '').match(/\[QUESTS\]([\s\S]*?)\[\/QUESTS\]/i);
-        if (!activeBlock && settings.quests && settings.quests.length > 0) {
-            if (settings.debugMode) {
+    if (quests.length === 0) {
+        const match = (memoText || '').match(/\[QUESTS\]([\s\S]*?)\[\/QUESTS\]/i);
+        if (!match && settings.quests && settings.quests.length > 0) {
+            if (settings.quests.length !== existingCompleted.length && settings.debugMode) {
                 console.log('[RPG Tracker] syncQuestsFromMemo: active quests cleared because [QUESTS] block was removed.');
             }
+            settings.quests = existingCompleted;
+        } else if (settings.quests && settings.quests.length > 0) {
+            settings.quests = existingCompleted;
         }
-        settings.quests = [];
         return;
     }
 
-    // Merge active quests with archived ones (archive wins on ID conflict so completed status is preserved)
-    const activeIds = new Set(quests.map(q => q.id));
+    // Merge newly parsed quests (which are active) with existing completed/failed ones
+    const newIds = new Set(quests.map(q => q.id));
     const merged = [...quests];
-    for (const aq of archivedQuests) {
-        if (!activeIds.has(aq.id)) {
-            merged.push(aq);
+    for (const eq of existingCompleted) {
+        if (!newIds.has(eq.id)) {
+            merged.push(eq);
         }
     }
 
     settings.quests = merged;
-    if (settings.debugMode) console.log(`[RPG Tracker] syncQuestsFromMemo: updated internal state with ${merged.length} quest(s) (${archivedQuests.length} archived).`);
+    if (settings.debugMode) console.log(`[RPG Tracker] syncQuestsFromMemo: updated internal state with ${merged.length} quest(s).`);
 }
 
 // ── Delta display ─────────────────────────────────────────────────────────────

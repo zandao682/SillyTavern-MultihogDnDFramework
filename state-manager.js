@@ -987,7 +987,7 @@ export function saveChatState(chatId) {
         blockOrder:   JSON.parse(JSON.stringify(s.blockOrder  || BLOCK_ORDER)),
         stockPrompts: JSON.parse(JSON.stringify(s.stockPrompts || DEFAULT_STOCK_PROMPTS)),
         customFields: JSON.parse(JSON.stringify(s.customFields || [])),
-        quests:       [],  // quests are derived from currentMemo on load — not persisted separately
+        quests:       JSON.parse(JSON.stringify(s.quests || [])), // persist full array (incl. completed) for cross-session UI display
         historyIndex: s.historyIndex ?? -1,
         activeRouterKeys: JSON.parse(JSON.stringify(s.activeRouterKeys || [])),
         activeWorldKeys:  JSON.parse(JSON.stringify(s.activeWorldKeys || [])),

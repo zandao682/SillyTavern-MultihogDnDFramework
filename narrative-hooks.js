@@ -584,11 +584,8 @@ export function installInterceptor() {
 
             if (settings.currentMemo && !content.includes("### STATE MEMO (DO NOT REPEAT)")) {
                 // Strip the JSON [QUESTS] block from the narrative context to save tokens and avoid redundancy
-                // Strip the JSON [QUESTS] and hidden [QUESTS_ARCHIVE] blocks from the narrative context
-                const memoText = stripMemoHtml(settings.currentMemo)
-                    .replace(/\[QUESTS\][\s\S]*?\[\/QUESTS\]/gi, '')
-                    .replace(/\[QUESTS_ARCHIVE\][\s\S]*?\[\/QUESTS_ARCHIVE\]/gi, '')
-                    .trim();
+                // Strip the JSON [QUESTS] block from the narrative context to save tokens and avoid redundancy
+                const memoText = stripMemoHtml(settings.currentMemo).replace(/\[QUESTS\][\s\S]*?\[\/QUESTS\]/gi, '').trim();
                 injections += `### STATE MEMO (DO NOT REPEAT)\n${memoText}\n\n`;
             }
 
