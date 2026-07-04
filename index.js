@@ -5373,7 +5373,7 @@ function createPanel() {
                                 let html = '';
                                 const coreEntries = Object.entries(parsed.core);
                                 if (coreEntries.length > 0) {
-                                    html += `<div style="font-size:11px;font-weight:bold;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:4px;">🛡️ Core Identity (Immutable)</div>`;
+                                    html += `<div style="font-size:11px;font-weight:bold;color:rgba(255,255,255,0.4);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:14px;border-bottom:1px solid rgba(255,255,255,0.1);padding-bottom:4px;">🛡️ Core Identity</div>`;
                                     for (const [name, lines] of coreEntries) {
                                         const icon = sectionIcons[name] || '📋';
                                         const sectionColor = (name === 'Appearance/Species' || name === 'Appearance') ? '#d4a940' :
