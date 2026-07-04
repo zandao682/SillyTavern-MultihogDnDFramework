@@ -2886,11 +2886,13 @@ function bindRenderedCardEvents(el, memo, isDetachedContext = false, onRefresh =
 
         startDateInput.addEventListener('input', () => {
             const val = startDateInput.value.trim();
-            if (val) {
-                syncSettingsAndUI(s => {
-                    s.initialDate = val;
-                });
-                syncOnboardingUI();
+            getSettings().initialDate = val;
+            saveSettings();
+
+            // Sync other onboarding input directly to prevent focus loss from re-rendering
+            const otherOnbInput = el.querySelector('#rt_onboarding_initial_date_input');
+            if (otherOnbInput) {
+                otherOnbInput.value = val;
             }
         });
     }
@@ -3179,9 +3181,13 @@ Saves: Fort +X | Ref +X | Will +X`;
     if (onboardingInitialDateInput) {
         onboardingInitialDateInput.addEventListener('input', () => {
             const val = onboardingInitialDateInput.value.trim();
-            if (val) {
-                getSettings().initialDate = val;
-                saveSettings();
+            getSettings().initialDate = val;
+            saveSettings();
+
+            // Sync character creator start date directly
+            const creatorStartDate = el.querySelector('#rt-onboarding-start-date');
+            if (creatorStartDate) {
+                creatorStartDate.value = val;
             }
         });
     }
