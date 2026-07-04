@@ -383,7 +383,7 @@
                             Since last user message <span style="opacity:0.55; font-size:0.88em;">(recommended)</span>
                         </label>
                         <div id="rpg_tracker_lookback_numeric_row" style="transition: opacity 0.2s; opacity: 0.35; pointer-events: none;">
-                            <label style="margin-top: 4px;">Fixed message count</label>
+                            <label style="margin-top: 4px;">Fixed turn count</label>
                             <input id="rpg_tracker_lookback_messages" type="text" inputmode="numeric" pattern="[0-9]*" class="text_pole" value="2" title="Number of recent messages to include when 'Since last user message' is disabled." />
                         </div>
                         <label>History Context (States)</label>
@@ -501,9 +501,9 @@
                                     <div id="rpg_tracker_router_lookback_numeric_row" style="transition: opacity 0.2s; opacity: 0.35; pointer-events: none;">
                                         <label class="checkbox_label" title="Read a fixed number of recent messages.">
                                             <input id="rpg_tracker_router_lookback_fixed" type="radio" name="router_lookback_mode" value="fixed" />
-                                            Fixed message count
+                                            Fixed turn count
                                         </label>
-                                        <input id="rpg_tracker_router_lookback" type="text" inputmode="numeric" pattern="[0-9]*" class="text_pole" min="1" max="100" title="Last N chat messages (user and assistant) when 'Fixed message count' is selected." />
+                                        <input id="rpg_tracker_router_lookback" type="text" inputmode="numeric" pattern="[0-9]*" class="text_pole" min="1" max="100" title="Last N user turns (includes all assistant and tool messages in each turn) when 'Fixed turn count' is selected." />
                                     </div>
 
 

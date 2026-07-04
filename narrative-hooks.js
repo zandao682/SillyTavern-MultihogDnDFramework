@@ -12,7 +12,7 @@
  * circular import. This will be cleaned up when index.js is split.
  */
 
-import { getSettings, hydrateWorldProgressionFromChatState, persistWorldProgressionTimer } from './state-manager.js';
+import { getSettings, hydrateWorldProgressionFromChatState, persistWorldProgressionTimer, persistRouterLastRunWatermark } from './state-manager.js';
 import { syncCombatProfile } from './llm-client.js';
 import { parseQuestsFromMemo, extractCurrentTimeStr, cleanMessageContent, formatInWorldTime } from './memo-processor.js';
 import { runRouterPass, saveSceneToLorebook, scanAssistantOutputForKeywords, parseInWorldMinutes, runWorldProgressionPass, updateLorebookEntry, getLorebookManifest } from './router.js';
@@ -1516,6 +1516,14 @@ export async function onGenerationEnded() {
 
     // Step 5: Lorebook Agent pass — passes the full accumulated set of keyword-triggered IDs
     // from all throttled turns since the last agent run (not just the current generation).
+    if (settings.routerWatermarkBaselinePending) {
+        settings.routerWatermarkBaselinePending = false;
+        persistRouterLastRunWatermark(chat.length);
+        if (settings.debugMode) {
+            console.log('[RPG Tracker] Lorebook Agent watermark baselined at chat.length', chat.length);
+        }
+        return;
+    }
     const triggeredForAgent = [..._pendingKeywordTriggered];
     _pendingKeywordTriggered = []; // reset accumulator now that the agent is about to process them
     await runRouterPass(combinedNarrative, null, null, false, triggeredForAgent);

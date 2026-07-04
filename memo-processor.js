@@ -698,6 +698,59 @@ export function computeDelta(oldMemo, newMemo) {
 // ── Tool-call message detection ───────────────────────────────────────────────
 
 /**
+ * Index of the Nth-most-recent user message (1 = latest user turn), including
+ * all assistant/tool messages after it. Returns 0 if fewer than N user messages exist.
+ * @param {any[]} chat
+ * @param {number} n
+ * @returns {number}
+ */
+export function findNthUserMessageStartIdx(chat, n = 1) {
+    if (!chat?.length || n <= 0) return 0;
+    let found = 0;
+    for (let i = chat.length - 1; i >= 0; i--) {
+        if (chat[i]?.is_user) {
+            found++;
+            if (found >= n) return i;
+        }
+    }
+    return 0;
+}
+
+/**
+ * Formats chat messages from startIdx for Lorebook Agent context.
+ * @param {any[]} chat
+ * @param {number} startIdx
+ * @param {boolean} [includeHidden=false]
+ * @param {boolean} [fullIndexCoverage=false] When true (since-last-run), walk every chat slot in range and include all non-system narrative content — tool-call UI shells are still dropped.
+ * @returns {string}
+ */
+export function formatAgentChatLogFromIndex(chat, startIdx, includeHidden = false, fullIndexCoverage = false) {
+    if (!chat?.length || startIdx >= chat.length) return '';
+    const lines = [];
+    for (let i = startIdx; i < chat.length; i++) {
+        const msg = chat[i];
+        if (msg?.is_system) continue;
+        if (!includeHidden && msg?.is_hidden) continue;
+        if (msg?.extra?.['summary'] || msg?.extra?.['is_summary'] || msg?.extra?.['summary_data']) continue;
+
+        const raw = msg.mes || msg.content || '';
+        const toolStripped = cleanToolCallMessage(raw);
+        let content = '';
+        if (toolStripped !== null) {
+            content = cleanMessageContent({ ...msg, mes: toolStripped, content: toolStripped });
+        } else if (fullIndexCoverage) {
+            content = cleanMessageContent({ ...msg, mes: raw, content: raw });
+        }
+        if (!content) continue;
+        if (content.startsWith('[Summary') || content.startsWith('(Summary') || content.includes('Summary of past events:')) continue;
+
+        const name = msg.is_user ? 'Player' : (msg.name || 'Narrator');
+        lines.push(`${name}: ${content}`);
+    }
+    return lines.join('\n\n');
+}
+
+/**
  * Returns null if the message is a tool-call payload (discard it from context).
  * Returns the original text if it is regular narrative.
  * @param {string} text

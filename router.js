@@ -1,7 +1,7 @@
 import { getSettings, getEffectiveRouterCampaignPrefix, persistWorldProgressionTimer, persistRouterLastRunWatermark } from './state-manager.js';
 import { sendStateRequest, sendAgentTurn } from './llm-client.js';
 import { getRequestHeaders } from '../../../../script.js';
-import { extractCurrentTimeStr, cleanMessageContent, parseInWorldTime, formatInWorldTime } from './memo-processor.js';
+import { extractCurrentTimeStr, cleanMessageContent, parseInWorldTime, formatInWorldTime, findNthUserMessageStartIdx, formatAgentChatLogFromIndex } from './memo-processor.js';
 
 let _routerRunning = false;
 let _routerNormalRunCount = 0; // tracks completed normal (non-cleanup) passes for auto-cleanup interval
@@ -354,14 +354,15 @@ export async function runRouterPass(narrativeOutput, manualPrompt = null, custom
         if (overrideChatLog) {
             recentChatString = overrideChatLog;
         } else {
-            // Three-way lookback priority (only applies to auto-passes; Direct Prompt always passes customLookback)
+            // Three-way lookback priority (only applies to auto-passes; Direct Prompt always passes customLookback).
+            // Since-last-run uses a chat-length watermark (every array slot, including tool-call messages).
+            // Fixed/direct lookback counts user turns, not raw message slots — tool calls can inflate the latter.
             const sinceLastRun  = customLookback === null && settings.routerLookbackSinceLastRun !== false;
             const sinceLastUser = customLookback === null && !sinceLastRun && settings.routerLookbackSinceLastUser === true;
             let startIdx;
             if (sinceLastRun) {
                 let lastLen = settings.routerLastRunChatLength || 0;
                 if (lastLen > chat.length) {
-                    // Chat shortened (swipe/delete) — stale watermark; re-sync from the start
                     lastLen = 0;
                     persistRouterLastRunWatermark(0);
                 }
@@ -373,24 +374,17 @@ export async function runRouterPass(narrativeOutput, manualPrompt = null, custom
                     startIdx = chat.length;
                 }
             } else if (sinceLastUser) {
-                // Walk backward to find the most recent user message, then include it
-                // and everything after — captures the full turn including tool call messages.
-                startIdx = chat.length - 1;
-                while (startIdx > 0 && !(/** @type {any} */ (chat[startIdx])).is_user) {
-                    startIdx--;
-                }
-                // If no user message found (all-AI chat), fall back to last 4
-                if (startIdx === 0 && !(/** @type {any} */ (chat[0]))?.is_user) {
-                    startIdx = Math.max(0, chat.length - 4);
-                }
+                startIdx = findNthUserMessageStartIdx(chat, 1);
             } else {
-                const N = customLookback !== null ? customLookback : (settings.routerLookback || 4);
-                startIdx = Math.max(0, chat.length - N);
+                const turnCount = customLookback !== null ? customLookback : (settings.routerLookback || 4);
+                startIdx = findNthUserMessageStartIdx(chat, Math.max(1, turnCount));
             }
-            recentChatString = chat.slice(startIdx).map(m => {
-                const name = (/** @type {any} */ (m)).is_user ? 'Player' : ((/** @type {any} */ (m)).name || 'Narrator');
-                return `${name}: ${cleanMessageContent(m)}`;
-            }).join('\n\n');
+            recentChatString = formatAgentChatLogFromIndex(
+                chat,
+                startIdx,
+                !!settings.routerIncludeHidden,
+                sinceLastRun
+            );
         }
 
 

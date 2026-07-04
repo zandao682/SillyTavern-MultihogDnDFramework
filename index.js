@@ -1,7 +1,7 @@
 import { EXAMPLES, COLOR_EXAMPLES, DEFAULT_STOCK_PROMPTS, RT_PROMPTS, BLOCK_ICONS, BLOCK_ORDER, PAGE_SIZE, NO_PAGINATE, QUESTS_NARRATOR } from './constants.js';
 import { MODULE_NAME, DEFAULT_MODULES, getSettings, getBarBackground, migrateCustomFields, saveChatState, saveProfile, deleteProfile, getEffectiveRouterCampaignPrefix, sanitizeCampaignPrefixString, buildNpcInstruction } from './state-manager.js';
 import { sendStateRequest, fetchOllamaModels, fetchOpenAIModels, testOpenAIConnection, getConnectionProfiles, getCurrentCompletionPreset, setCompletionPreset, syncCombatProfile, resetCombatProfileOverride } from './llm-client.js';
-import { getDiceToolName, getDiceCommandName, getDiceCommandAliases, doDiceRoll, registerDiceFunctionTool, registerDiceSlashCommand, installInterceptor, getNarrativeBlocks, onGenerationStarted, onGenerationEnded, ensureRelTagRegex, resetRouterTick, getRouterTick, makeRngQueue, buildRngBlock, RNG_QUEUE_LEN, parseAndApplyNarrativeRelTags } from './narrative-hooks.js';
+import { getDiceToolName, getDiceCommandName, getDiceCommandAliases, doDiceRoll, registerDiceFunctionTool, registerDiceSlashCommand, installInterceptor, getNarrativeBlocks, onGenerationStarted, onGenerationEnded, ensureRelTagRegex, resetRouterTick, makeRngQueue, buildRngBlock, RNG_QUEUE_LEN, parseAndApplyNarrativeRelTags } from './narrative-hooks.js';
 import { deduplicateMemo, mergeMemo, computeDelta, escapeHtml, escapeRegex, highlightParens, cleanToolCallMessage, cleanMessageContent, getLastUserAction, buildLorebookContext, buildModulesInstructionText, buildModuleFormatInstruction, parseQuestsFromMemo, syncQuestsFromMemo, syncQuestsToMemo, writeQuestsToMemo, getQuestMood, extractCurrentTimeStr, stripCompletedQuestsFromMemo, parseInWorldTime, formatInWorldTime } from './memo-processor.js';
 import { renderSubFieldByRule, tryRenderMarker, renderCustomBlockLine, stripMemoHtml, escapeHtmlWithColor, parseMemoBlocks, getPageSize, loadCollapsed, saveCollapsed, loadDetached, saveDetached, blockToItems, renderMemoAsCards, renderQuestLog, renderLorebookTerminal } from './renderer.js';
 import { unregisterLogQuestTool, checkQuestDeadlines, renderQuestsAsPlainText } from './quests.js';
@@ -3800,7 +3800,7 @@ function createPanel() {
                                 <input type="radio" name="rt-lookback-mode" id="rt-agent-lookback-mode-user" value="since_last_user" ${mode === 'since_last_user' ? 'checked' : ''}>
                                 <span>Since last user message</span>
                             </label>
-                            <div id="rt-agent-router-lookback-container" style="display: flex; align-items: center; gap: 6px; flex: 1; transition: opacity 0.2s; ${mode !== 'fixed' ? 'opacity: 0.35; pointer-events: none;' : ''}" title="Read the last N messages.">
+                            <div id="rt-agent-router-lookback-container" style="display: flex; align-items: center; gap: 6px; flex: 1; transition: opacity 0.2s; ${mode !== 'fixed' ? 'opacity: 0.35; pointer-events: none;' : ''}" title="Read the last N user turns (includes all tool messages in each turn).">
                                 <label style="display: flex; align-items: center; gap: 5px; cursor: pointer; font-size: 0.769em; opacity: 0.75; flex: none;">
                                     <input type="radio" name="rt-lookback-mode" id="rt-agent-lookback-mode-fixed" value="fixed" ${mode === 'fixed' ? 'checked' : ''}>
                                     <span>Fixed:</span>
@@ -3958,7 +3958,7 @@ function createPanel() {
                     </div>
                 </div>
                 <div class="rpg-tracker-footer" id="rt-agent-footer">
-                    <div id="rt-agent-last-run" style="text-align: center; font-size: 0.8em; opacity: 0.65; color: var(--rt-text-muted); padding: 2px 0 4px; line-height: 1.3; flex-shrink: 0;"></div>
+                    <div id="rt-agent-last-run" style="text-align: center; font-size: 0.8em; opacity: 0.65; color: var(--rt-text-muted); padding: 2px 0 4px; line-height: 1.3; flex-shrink: 0;">Last Run.</div>
                     <div class="rpg-tracker-nav">
                         <button class="rpg-tracker-nav-btn" id="rt-agent-nav-back" title="Undo last lorebook pass">←</button>
                         <span class="rpg-tracker-nav-label" id="rt-agent-nav-label">[ LIVE ]</span>
@@ -8003,37 +8003,6 @@ Rules:
 
     updateUndoLabel();
 
-    // ── Last Run status display ────────────────────────────────────────────
-    const lastRunEl = agentPanel.querySelector('#rt-agent-last-run');
-    function syncLastRunDisplay() {
-        if (!lastRunEl) return;
-        const s = getSettings();
-        const { chat } = SillyTavern.getContext();
-        const runEvery = s.routerRunEvery || 3;
-        const tick = getRouterTick();          // msgs since last auto-run (in-memory)
-        const currentLength = chat?.length ?? 0;
-        let lastRunLength = s.routerLastRunChatLength || 0;
-        if (lastRunLength > currentLength) lastRunLength = 0;
-        const msgsSinceRun = Math.max(0, currentLength - lastRunLength);
-
-        let parts = [];
-        if (lastRunLength === 0) {
-            parts.push('Not run yet');
-        } else if (msgsSinceRun === 0) {
-            parts.push('Last Run: just now');
-        } else {
-            parts.push(`${msgsSinceRun} msg${msgsSinceRun !== 1 ? 's' : ''} unprocessed`);
-        }
-
-        if (runEvery > 1) {
-            const nextIn = runEvery - tick;
-            parts.push(`Next in: ${nextIn} msg${nextIn !== 1 ? 's' : ''}`);
-        }
-
-        lastRunEl.textContent = parts.join(' · ');
-    }
-    syncLastRunDisplay();
-
     document.addEventListener('rt_lore_agent_updated', async () => {
         saveSettings();
         // Flush ST's in-memory lorebook cache before re-rendering so that
@@ -8044,11 +8013,6 @@ Rules:
         }
         await renderRouterUI();
         updateUndoLabel();
-        syncLastRunDisplay();
-    });
-
-    document.addEventListener('rt_generation_tick', () => {
-        syncLastRunDisplay();
     });
 
     // ── Lorebook Terminal Logic ──

@@ -293,6 +293,7 @@ You may be asked to use Markers: ((PLS)), ((B)), ((XB)), ((BDG)), ((HGT)). These
         routerLookbackSinceLastRun: true,   // default: capture all messages since the last agent run
         routerLookbackSinceLastUser: false,  // alternative: capture since last user message
         routerLastRunChatLength: 0,          // watermark: chat.length when the agent last ran
+        routerWatermarkBaselinePending: false, // one-shot: baseline watermark after lookback fix upgrade
         routerUndockHintShown: false,
         routerPromptForPrefix: false,
         routerModules: JSON.parse(JSON.stringify(DEFAULT_MODULES)),
@@ -761,6 +762,12 @@ Example: [[FAC: Iron Syndicate | ...]]  NOT  [[FAC: Khelt :: Iron Syndicate | ..
             s.routerModules.npc.instruction = buildNpcInstruction(s.npcMajorWords, s.npcMinorWords, false);
         }
         s.settingsVersion = '3.16.19';
+    }
+
+    // Baseline since-last-run watermark after lookback reliability fix (v3.16.20)
+    if (!s.settingsVersion || s.settingsVersion < '3.16.20') {
+        s.routerWatermarkBaselinePending = true;
+        s.settingsVersion = '3.16.20';
     }
 
     // ── MIGRATION: Update system prompts with keywords instructions (v3.2.3+) ──────
