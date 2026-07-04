@@ -1,6 +1,6 @@
 import { EXAMPLES, COLOR_EXAMPLES, DEFAULT_STOCK_PROMPTS, RT_PROMPTS, BLOCK_ICONS, BLOCK_ORDER, PAGE_SIZE, NO_PAGINATE, QUESTS_NARRATOR } from './constants.js';
 import { MODULE_NAME, DEFAULT_MODULES, getSettings, getBarBackground, migrateCustomFields, saveChatState, saveProfile, deleteProfile, getEffectiveRouterCampaignPrefix, sanitizeCampaignPrefixString, buildNpcInstruction } from './state-manager.js';
-import { sendStateRequest, fetchOllamaModels, fetchOpenAIModels, testOpenAIConnection, getConnectionProfiles, getCurrentCompletionPreset, setCompletionPreset } from './llm-client.js';
+import { sendStateRequest, fetchOllamaModels, fetchOpenAIModels, testOpenAIConnection, getConnectionProfiles, getCurrentCompletionPreset, setCompletionPreset, syncCombatProfile, resetCombatProfileOverride } from './llm-client.js';
 import { getDiceToolName, getDiceCommandName, getDiceCommandAliases, doDiceRoll, registerDiceFunctionTool, registerDiceSlashCommand, installInterceptor, getNarrativeBlocks, onGenerationStarted, onGenerationEnded, ensureRelTagRegex, resetRouterTick, getRouterTick, makeRngQueue, buildRngBlock, RNG_QUEUE_LEN, parseAndApplyNarrativeRelTags } from './narrative-hooks.js';
 import { deduplicateMemo, mergeMemo, computeDelta, escapeHtml, escapeRegex, highlightParens, cleanToolCallMessage, cleanMessageContent, getLastUserAction, buildLorebookContext, buildModulesInstructionText, buildModuleFormatInstruction, parseQuestsFromMemo, syncQuestsFromMemo, syncQuestsToMemo, writeQuestsToMemo, getQuestMood, extractCurrentTimeStr, stripCompletedQuestsFromMemo, parseInWorldTime, formatInWorldTime } from './memo-processor.js';
 import { renderSubFieldByRule, tryRenderMarker, renderCustomBlockLine, stripMemoHtml, escapeHtmlWithColor, parseMemoBlocks, getPageSize, loadCollapsed, saveCollapsed, loadDetached, saveDetached, blockToItems, renderMemoAsCards, renderQuestLog, renderLorebookTerminal } from './renderer.js';
@@ -1185,6 +1185,10 @@ function onChatChanged(newChatId) {
     const isActualChange = oldChatId !== newChatId;
     resetRouterTick(isActualChange);
 
+    if (isActualChange) {
+        void resetCombatProfileOverride(s);
+    }
+
     // Auto-activate and prefix logic run regardless of chatLinkEnabled.
     // Always re-derive the prefix from the chat ID so stale saved data never
     // causes the wrong session's lorebooks to activate.
@@ -1307,6 +1311,10 @@ function onChatChanged(newChatId) {
     }
 
     updateChatLinkUI();
+
+    if (isActualChange) {
+        void syncCombatProfile(s.currentMemo, s);
+    }
 }
 
 
@@ -8572,6 +8580,7 @@ function syncMemoView() {
     // currentMemo — without this, stale completed quests bleed into the UI).
     if (_historyViewIndex === -1) {
         syncQuestsFromMemo(s.currentMemo);
+        void syncCombatProfile(s.currentMemo, s);
     }
 
     refreshRenderedView();
@@ -10344,6 +10353,9 @@ function buildSysprompt(rawText) {
             settings.enabled = !!$(this).prop('checked');
             saveSettings();
             updatePanelStatus();
+            if (!settings.enabled) {
+                void resetCombatProfileOverride(settings);
+            }
         });
 
         $('#rpg_tracker_debug').prop('checked', settings.debugMode).on('change', function () {
@@ -10412,6 +10424,40 @@ function buildSysprompt(rawText) {
             settings.showTotalInventoryValue = !!$(this).prop('checked');
             saveSettings();
             refreshRenderedView();
+        });
+
+        const combatProfileSelect = $('#rpg_combat_connection_profile');
+        const combatProfileGroup = $('#rpg_combat_profile_group');
+
+        function updateCombatProfilePanel() {
+            combatProfileGroup.toggle(!!settings.combatProfileAutoSwitch);
+        }
+
+        $('#rpg_tracker_combat_profile_auto_switch').prop('checked', !!settings.combatProfileAutoSwitch).on('change', async function () {
+            settings.combatProfileAutoSwitch = !!$(this).prop('checked');
+            updateCombatProfilePanel();
+            saveSettings();
+            if (!settings.combatProfileAutoSwitch) {
+                await resetCombatProfileOverride(settings);
+            } else {
+                await syncCombatProfile(settings.currentMemo, settings);
+            }
+        });
+        updateCombatProfilePanel();
+
+        if (ctx.ConnectionManagerRequestService?.handleDropdown) {
+            /** @type {any} */ (ctx.ConnectionManagerRequestService).handleDropdown(combatProfileSelect[0]);
+            combatProfileSelect.val(settings.combatConnectionProfileId || '');
+        } else {
+            getConnectionProfiles().then(profiles => {
+                combatProfileSelect.empty().append('<option value="">-- No Profile Selected --</option>');
+                profiles.forEach(p => combatProfileSelect.append($('<option></option>').val(p).text(p)));
+                combatProfileSelect.val(settings.combatConnectionProfileId || '');
+            });
+        }
+        combatProfileSelect.on('change', function () {
+            settings.combatConnectionProfileId = $(this).val();
+            saveSettings();
         });
 
         // RNG Help Popup Trigger (Settings)

@@ -13,6 +13,7 @@
  */
 
 import { getSettings, hydrateWorldProgressionFromChatState, persistWorldProgressionTimer } from './state-manager.js';
+import { syncCombatProfile } from './llm-client.js';
 import { parseQuestsFromMemo, extractCurrentTimeStr, cleanMessageContent, formatInWorldTime } from './memo-processor.js';
 import { runRouterPass, saveSceneToLorebook, scanAssistantOutputForKeywords, parseInWorldMinutes, runWorldProgressionPass, updateLorebookEntry, getLorebookManifest } from './router.js';
 import { logTransaction } from './debug-viewer.js';
@@ -1493,6 +1494,13 @@ export async function onGenerationEnded() {
         }
     } else {
         if (settings.debugMode) console.log(`[RPG Tracker] State Tracker skipped (tick ${_stateTrackerAutoTick}/${stateRunEvery}).`);
+    }
+
+    // Step 2b: Combat main-profile auto-switch — check raw memo after State Tracker (or on existing memo if throttled).
+    try {
+        await syncCombatProfile(getSettings().currentMemo, settings);
+    } catch (e) {
+        console.warn('[RPG Tracker] Combat profile sync failed:', e);
     }
 
     // Step 3: World Progression deterministic check — runs AFTER the State Tracker has updated

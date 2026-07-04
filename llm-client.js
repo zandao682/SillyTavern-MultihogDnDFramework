@@ -39,6 +39,156 @@ export async function setCompletionPreset(name) {
     await executeSlashCommandsWithOptions(`/preset "${name}"`);
 }
 
+// ── Combat Main-Profile Auto-Switch ────────────────────────────────────────────
+
+const MAIN_PROFILE_NONE = '<None>';
+
+/** @type {string|null} Profile name to restore when combat ends. */
+let _combatBaselineProfileName = null;
+/** @type {boolean} Whether the extension currently owns a combat profile override. */
+let _combatProfileOverrideActive = false;
+/** @type {Promise<void>|null} Serializes concurrent profile switches. */
+let _combatProfileSwitchChain = null;
+
+/** Returns true when the memo contains an active (non-empty, non-END_COMBAT) [COMBAT] block. */
+export function isCombatActive(memo) {
+    if (!memo) return false;
+    const match = memo.match(/\[COMBAT\]([\s\S]*?)\[\/COMBAT\]/i);
+    if (!match) return false;
+    const body = match[1].trim();
+    return body.length > 0 && !/^END_COMBAT$/i.test(body);
+}
+
+function escapeSlashArg(value) {
+    return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function getProfileNameById(profileId) {
+    if (!profileId) return null;
+    try {
+        const ctx = SillyTavern.getContext();
+        const service = ctx.ConnectionManagerRequestService;
+        if (service?.getProfile) {
+            return service.getProfile(profileId)?.name ?? null;
+        }
+        const profiles = ctx.extensionSettings?.connectionManager?.profiles || [];
+        return profiles.find(p => p.id === profileId)?.name ?? null;
+    } catch {
+        return null;
+    }
+}
+
+/** Returns the name of the currently active main ST connection profile, or null for None. */
+export async function getCurrentMainProfileName() {
+    if (!(await checkConnectionProfilesActive())) return null;
+    const { executeSlashCommandsWithOptions } = SillyTavern.getContext();
+    const result = await executeSlashCommandsWithOptions('/profile');
+    const name = result?.pipe?.trim();
+    if (!name || name === MAIN_PROFILE_NONE) return null;
+    return name;
+}
+
+async function switchMainConnectionProfileByName(profileName) {
+    if (!(await checkConnectionProfilesActive())) return;
+    const { executeSlashCommandsWithOptions } = SillyTavern.getContext();
+    const arg = profileName ? escapeSlashArg(profileName) : MAIN_PROFILE_NONE;
+    await executeSlashCommandsWithOptions(`/profile "${arg}"`);
+}
+
+function runSerializedCombatSwitch(fn) {
+    const run = async () => {
+        if (_combatProfileSwitchChain) await _combatProfileSwitchChain.catch(() => { });
+        await fn();
+    };
+    _combatProfileSwitchChain = run();
+    return _combatProfileSwitchChain;
+}
+
+/** Restores the pre-combat main profile if the extension currently owns the override. */
+export async function resetCombatProfileOverride(settings) {
+    settings = settings || getSettings();
+    if (!_combatProfileOverrideActive) return;
+
+    const baseline = _combatBaselineProfileName;
+    _combatProfileOverrideActive = false;
+    _combatBaselineProfileName = null;
+
+    await runSerializedCombatSwitch(async () => {
+        try {
+            await switchMainConnectionProfileByName(baseline);
+            if (settings.debugMode) {
+                console.log(`[RPG Tracker] Combat profile override reset → ${baseline ?? MAIN_PROFILE_NONE}`);
+            }
+        } catch (e) {
+            console.warn('[RPG Tracker] Failed to reset combat profile override:', e);
+        }
+    });
+}
+
+/**
+ * Switches the main ST connection profile based on [COMBAT] presence in the memo.
+ * Called after each narration generation (post State Tracker pass).
+ * @param {string} memo
+ * @param {ReturnType<import('./state-manager.js').getSettings>} [settings]
+ */
+export async function syncCombatProfile(memo, settings) {
+    settings = settings || getSettings();
+
+    if (!settings.combatProfileAutoSwitch || !settings.enabled || settings.paused) {
+        await resetCombatProfileOverride(settings);
+        return;
+    }
+
+    if (!(await checkConnectionProfilesActive())) return;
+
+    const combatProfileId = settings.combatConnectionProfileId;
+    if (!combatProfileId) return;
+
+    const combatProfileName = getProfileNameById(combatProfileId);
+    if (!combatProfileName) return;
+
+    const combatActive = isCombatActive(memo);
+
+    await runSerializedCombatSwitch(async () => {
+        try {
+            const currentName = await getCurrentMainProfileName();
+
+            if (combatActive) {
+                if (!_combatProfileOverrideActive) {
+                    if (currentName === combatProfileName) return;
+                    _combatBaselineProfileName = currentName;
+                    _combatProfileOverrideActive = true;
+                    await switchMainConnectionProfileByName(combatProfileName);
+                    if (settings.debugMode) {
+                        console.log(`[RPG Tracker] Combat profile activated: ${combatProfileName} (baseline: ${_combatBaselineProfileName ?? MAIN_PROFILE_NONE})`);
+                    }
+                } else if (currentName !== combatProfileName) {
+                    await switchMainConnectionProfileByName(combatProfileName);
+                    if (settings.debugMode) {
+                        console.log(`[RPG Tracker] Re-applied combat profile: ${combatProfileName}`);
+                    }
+                }
+                return;
+            }
+
+            if (!_combatProfileOverrideActive) return;
+
+            const baseline = _combatBaselineProfileName;
+            _combatProfileOverrideActive = false;
+            _combatBaselineProfileName = null;
+
+            if (currentName !== baseline) {
+                await switchMainConnectionProfileByName(baseline);
+                if (settings.debugMode) {
+                    console.log(`[RPG Tracker] Combat ended — restored profile: ${baseline ?? MAIN_PROFILE_NONE}`);
+                }
+            }
+        } catch (e) {
+            console.warn('[RPG Tracker] Combat profile sync failed:', e);
+        }
+    });
+}
+
 // ── CORS Proxy Helpers ─────────────────────────────────────────────────────────
 
 function proxiedUrl(url, useProxy = true) {
