@@ -5419,7 +5419,7 @@ function createPanel() {
                                     <span id="rt-npc-detail-${type}-text" style="font-size:15px;font-weight:bold;text-align:right;color:${valColor};font-family:monospace;">${clamped > 0 ? '+' : ''}${clamped}</span>
                                     <div></div>
                                     <div></div>
-                                    <input type="range" id="rt-npc-detail-${type}-slider" min="-100" max="100" value="${clamped}" step="5"
+                                    <input type="range" id="rt-npc-detail-${type}-slider" min="-100" max="100" value="${clamped}" step="1"
                                         style="width:100%;margin:0;accent-color:${bgColor};height:4px;cursor:pointer;outline:none;">
                                     <div></div>
                                 </div>`;
