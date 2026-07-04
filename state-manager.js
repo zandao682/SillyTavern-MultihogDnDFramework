@@ -286,7 +286,7 @@ You may be asked to use Markers: ((PLS)), ((B)), ((XB)), ((BDG)), ((HGT)). These
         routerBasicMode: false,
         routerNativeKeywordActivation: false,
         routerPaused: false,
-        routerRunEvery: 1,
+        routerRunEvery: 3,
         routerIncludeHidden: false,
         routerLookbackSinceLastRun: true,   // default: capture all messages since the last agent run
         routerLookbackSinceLastUser: false,  // alternative: capture since last user message

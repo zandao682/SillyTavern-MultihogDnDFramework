@@ -3785,9 +3785,9 @@ function createPanel() {
                         })()}
 
                         <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 6px;">
-                            <div style="display: flex; align-items: center; gap: 6px; flex: 1;" title="Run every N messages: The agent only fires an auto-pass once per N AI responses. Higher = fewer runs, fewer tokens. Manual runs always fire immediately.">
+                            <div style="display: flex; align-items: center; gap: 6px; flex: 1;" title="Run every N messages: 1 = fires every turn (always current, but may create excessive entry granularity). 3+ = fires less often but sees more narrative context, producing more coherent updates. Keyword hits still fire immediately regardless.">
                                 <span style="font-size: 0.769em; opacity: 0.7;">Run every:</span>
-                                <input type="text" inputmode="numeric" pattern="[0-9]*" id="rt-agent-router-run-every" value="${settings.routerRunEvery || 1}" min="1" max="50" style="width: 40px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: white; border-radius: 3px; text-align: center; font-size: 0.769em; padding: 1px;">
+                                <input type="text" inputmode="numeric" pattern="[0-9]*" id="rt-agent-router-run-every" value="${settings.routerRunEvery || 3}" min="1" max="50" style="width: 40px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: white; border-radius: 3px; text-align: center; font-size: 0.769em; padding: 1px;">
                                 <span style="font-size: 0.769em; opacity: 0.5;">msgs</span>
                             </div>
                         </div>
@@ -7526,7 +7526,7 @@ Rules:
         if (runEveryInput) {
             runEveryInput.addEventListener('input', (e) => {
                 const s = getSettings();
-                s.routerRunEvery = parseInt((/** @type {HTMLInputElement} */ (e.target)).value) || 1;
+                s.routerRunEvery = parseInt((/** @type {HTMLInputElement} */ (e.target)).value) || 3;
                 $('#rpg_tracker_router_run_every').val(s.routerRunEvery);
                 saveSettings();
             });
@@ -7941,7 +7941,7 @@ Rules:
         if (!lastRunEl) return;
         const s = getSettings();
         const { chat } = SillyTavern.getContext();
-        const runEvery = s.routerRunEvery || 1;
+        const runEvery = s.routerRunEvery || 3;
         const tick = getRouterTick();          // msgs since last auto-run (in-memory)
         const lastRunLength = s.routerLastRunChatLength || 0;
         const currentLength = chat?.length ?? 0;
@@ -12751,8 +12751,8 @@ RULES:
             $('#rt-agent-router-lookback').val(settings.routerLookback);
             saveSettings();
         });
-        $('#rpg_tracker_router_run_every').val(settings.routerRunEvery || 1).on('input', function () {
-            settings.routerRunEvery = parseInt(String($(this).val() || '')) || 1;
+        $('#rpg_tracker_router_run_every').val(settings.routerRunEvery || 3).on('input', function () {
+            settings.routerRunEvery = parseInt(String($(this).val() || '')) || 3;
             $('#rt-agent-router-run-every').val(settings.routerRunEvery);
             saveSettings();
         });
