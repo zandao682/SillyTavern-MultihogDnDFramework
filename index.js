@@ -5638,12 +5638,12 @@ function createPanel() {
                             // Try to extract Appearance section content first
                             const appMatch = cleanContent.match(/(?:Appearance\/Species|Appearance):\s*(.+?)(?=\s*(?:Personality|Brief Background|Habits|Behaviors|Relationship with|Friendship\/Rapport|Affection\/Interest):|$)/is);
                             if (appMatch && appMatch[1].trim()) {
-                                return appMatch[1].trim().substring(0, 140);
+                                return appMatch[1].trim().substring(0, 260);
                             }
                             // Fallback: first meaningful text
                             const lines = cleanContent.split('\n').map(l => l.trim())
                                 .filter(l => l && !/^\[ID:/i.test(l) && !/^Friendship\/Rapport:/i.test(l) && !/^Affection\/Interest:/i.test(l));
-                            return lines.slice(0, 2).join(' ').substring(0, 140);
+                            return lines.slice(0, 2).join(' ').substring(0, 260);
                         };
 
                         // Helper: parse NPC content into structured sections for the detail popup
