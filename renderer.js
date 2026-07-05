@@ -1,5 +1,5 @@
 import { getSettings, getBarBackground } from './state-manager.js';
-import { escapeHtml, highlightParens, highlightNumbers, parseInWorldTime, formatTimeDiff } from './memo-processor.js';
+import { escapeHtml, highlightParens, highlightNumbers, parseInWorldTime, formatTimeDiff, isArchivedQuestStatus } from './memo-processor.js';
 import { BLOCK_ICONS, BLOCK_ORDER, PAGE_SIZE, NO_PAGINATE } from './constants.js';
 
 // ── Renderer module: pure HTML string producers, localStorage helpers ──
@@ -1333,6 +1333,10 @@ function formatValueToCurrency(totalCp, detectedCurrency) {
                                 <input type="checkbox" id="rt_onboarding_quests_difficulty" />
                                 <span>Difficulty</span>
                             </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="rt_onboarding_quests_show_archive" checked />
+                                <span>Show completed/failed quests</span>
+                            </label>
                         </div>
                     </div>
 
@@ -1541,7 +1545,8 @@ export function renderQuestLog(quests, currentTime, collapsed, detached, filterT
     const showFrustration = !!settings.syspromptModules?.questsFrustration;
     const showDeadlines = !!settings.syspromptModules?.questsDeadlines;
 
-    const renderQuestCard = (quest) => {
+    const renderQuestCard = (quest, opts = {}) => {
+        const dismissible = !!opts.dismissible;
 
         const { getQuestMood } = /** @type {any} */ (globalThis.__rpgQuestUtils || {});
         const moodData = typeof getQuestMood === 'function' 
@@ -1646,13 +1651,17 @@ export function renderQuestLog(quests, currentTime, collapsed, detached, filterT
         const badgeBg = diffColors[quest.difficulty] || 'rgba(120, 120, 120, 0.2)';
         const badgeColor = diffColors[quest.difficulty] ? '#000' : 'rgba(255,255,255,0.9)';
         const diffBadge = quest.difficulty ? `<span class="rt-quest-badge" style="background: ${badgeBg}; color: ${badgeColor}; font-weight: 800; border: none;">${escapeHtml(String(quest.difficulty)).toUpperCase()}</span>` : '';
+        const dismissBtn = dismissible
+            ? `<button type="button" class="rt-quest-dismiss-btn" data-quest-id="${escapeHtml(quest.id)}" title="Remove from log">✕</button>`
+            : '';
 
-        return `<div class="${cardClass}">
+        return `<div class="${cardClass}" data-quest-id="${escapeHtml(quest.id)}">
             <div class="rt-quest-header">
                 <span class="rt-quest-title">${escapeHtml(quest.title)}</span>
                 <div class="rt-quest-badges">
                     ${diffBadge}
                     <span class="rt-quest-badge ${statusBadgeClass}">${statusLabel}</span>
+                    ${dismissBtn}
                 </div>
             </div>
             <div class="rt-quest-giver">${escapeHtml(quest.giver_name)} · <em>${escapeHtml(quest.giver_location)}</em></div>
@@ -1663,11 +1672,16 @@ export function renderQuestLog(quests, currentTime, collapsed, detached, filterT
         </div>`;
     };
 
-    const activeQuests = allQuests.filter(q => q.status !== 'completed');
-    const completedQuests = allQuests.filter(q => q.status === 'completed');
+    const activeQuests = allQuests.filter(q => !isArchivedQuestStatus(q.status));
+    const completedQuests = allQuests.filter(q => String(q.status || '').toLowerCase().trim() === 'completed');
+    const failedQuests = allQuests.filter(q => {
+        const st = String(q.status || '').toLowerCase().trim();
+        return st === 'failed' || st === 'past deadline';
+    });
 
-    const activeCardsHtml = activeQuests.map(renderQuestCard).join('');
-    const completedCardsHtml = completedQuests.map(renderQuestCard).join('');
+    const activeCardsHtml = activeQuests.map(q => renderQuestCard(q)).join('');
+    const completedCardsHtml = completedQuests.map(q => renderQuestCard(q, { dismissible: true })).join('');
+    const failedCardsHtml = failedQuests.map(q => renderQuestCard(q, { dismissible: true })).join('');
 
     let bodyHtml = activeCardsHtml || '<div class="rt-card-line" style="opacity:0.6; padding: 10px;">No active quests.</div>';
 
@@ -1683,6 +1697,21 @@ export function renderQuestLog(quests, currentTime, collapsed, detached, filterT
                 </div>
             </div>
             <div class="rt-section-body" style="padding: 5px;">${completedCardsHtml}</div>
+        </div>`;
+    }
+
+    if (failedQuests.length > 0) {
+        const isFailedCollapsed = collapsed.has(TAG + '_FAILED');
+        bodyHtml += `
+        <div class="rt-section-card rt-sub-section${isFailedCollapsed ? ' rt-collapsed' : ''}" data-tag="${TAG}_FAILED" style="margin-top: 10px; background: rgba(0,0,0,0.2); border-color: rgba(255,80,80,0.12); border-radius: 6px;">
+            <div class="rt-section-header" data-tag="${TAG}_FAILED" style="padding: 6px 10px; font-size: 0.9em; background: rgba(80,0,0,0.15); border-top-left-radius: 6px; border-top-right-radius: 6px;">
+                <span style="opacity:0.8;">❌ FAILED</span>
+                <div class="rt-section-header-right">
+                    <span class="rt-item-count" style="opacity:0.6;">${failedQuests.length} ${failedQuests.length === 1 ? 'entry' : 'entries'}</span>
+                    <span class="rt-collapse-icon" style="opacity:0.6;">${isFailedCollapsed ? '&#9656;' : '&#9662;'}</span>
+                </div>
+            </div>
+            <div class="rt-section-body" style="padding: 5px;">${failedCardsHtml}</div>
         </div>`;
     }
 

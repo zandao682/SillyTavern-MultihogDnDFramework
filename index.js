@@ -2,7 +2,7 @@ import { EXAMPLES, COLOR_EXAMPLES, DEFAULT_STOCK_PROMPTS, RT_PROMPTS, BLOCK_ICON
 import { MODULE_NAME, DEFAULT_MODULES, getSettings, getBarBackground, migrateCustomFields, saveChatState, saveProfile, deleteProfile, getEffectiveRouterCampaignPrefix, sanitizeCampaignPrefixString, buildNpcInstruction } from './state-manager.js';
 import { sendStateRequest, fetchOllamaModels, fetchOpenAIModels, testOpenAIConnection, getConnectionProfiles, getCurrentCompletionPreset, setCompletionPreset, syncCombatProfile, resetCombatProfileOverride } from './llm-client.js';
 import { getDiceToolName, getDiceCommandName, getDiceCommandAliases, doDiceRoll, registerDiceFunctionTool, registerDiceSlashCommand, installInterceptor, getNarrativeBlocks, onGenerationStarted, onGenerationEnded, ensureRelTagRegex, resetRouterTick, getRouterTick, resetRouterAutoTick, makeRngQueue, buildRngBlock, RNG_QUEUE_LEN, parseAndApplyNarrativeRelTags } from './narrative-hooks.js';
-import { deduplicateMemo, mergeMemo, computeDelta, escapeHtml, escapeRegex, highlightParens, cleanToolCallMessage, cleanMessageContent, getLastUserAction, buildLorebookContext, buildModulesInstructionText, buildModuleFormatInstruction, parseQuestsFromMemo, syncQuestsFromMemo, syncQuestsToMemo, writeQuestsToMemo, getQuestMood, extractCurrentTimeStr, stripCompletedQuestsFromMemo, parseInWorldTime, formatInWorldTime } from './memo-processor.js';
+import { deduplicateMemo, mergeMemo, computeDelta, escapeHtml, escapeRegex, highlightParens, cleanToolCallMessage, cleanMessageContent, getLastUserAction, buildLorebookContext, buildModulesInstructionText, buildModuleFormatInstruction, parseQuestsFromMemo, syncQuestsFromMemo, syncQuestsToMemo, writeQuestsToMemo, getQuestMood, extractCurrentTimeStr, stripArchivedQuestsFromMemo, stripCompletedQuestsFromMemo, applyQuestSyncAndStripMemo, isArchivedQuestStatus, removeArchivedQuest, parseInWorldTime, formatInWorldTime } from './memo-processor.js';
 import { renderSubFieldByRule, tryRenderMarker, renderCustomBlockLine, stripMemoHtml, escapeHtmlWithColor, parseMemoBlocks, getPageSize, loadCollapsed, saveCollapsed, loadDetached, saveDetached, blockToItems, renderMemoAsCards, renderQuestLog, renderLorebookTerminal } from './renderer.js';
 import { unregisterLogQuestTool, checkQuestDeadlines, renderQuestsAsPlainText } from './quests.js';
 import { initializeDebugViewer, toggleDebugViewer } from './debug-viewer.js';
@@ -497,6 +497,9 @@ function syncOnboardingUI() {
     // Difficulty Sync
     const difficulty = /** @type {HTMLInputElement|null} */ (onboarding.querySelector('#rt_onboarding_quests_difficulty'));
     if (difficulty) difficulty.checked = !!s.syspromptModules?.questsDifficulty;
+
+    const showArchiveOnb = /** @type {HTMLInputElement|null} */ (onboarding.querySelector('#rt_onboarding_quests_show_archive'));
+    if (showArchiveOnb) showArchiveOnb.checked = s.syspromptModules?.questsShowArchive !== false;
 
 
     // Optional Components Sync
@@ -1065,9 +1068,8 @@ function loadChatState(chatId) {
 
     _historyViewIndex = -1;
 
-    // currentMemo is the source of truth for quest state.
-    // Derive settings.quests FROM it rather than injecting quests BACK INTO the memo.
-    syncQuestsFromMemo(s.currentMemo);
+    // Derive settings.quests from memo and strip archived quests from stored memo text.
+    s.currentMemo = applyQuestSyncAndStripMemo(s.currentMemo);
 
     const dp = document.getElementById('rpg-tracker-delta-content');
     if (dp) dp.innerHTML = s.lastDelta || '<span class="delta-empty">No changes yet.</span>';
@@ -2232,10 +2234,8 @@ async function runStateModelPass(narrativeOutput, isFullContext = false, overrid
             // Commit to settings
             settings.prevMemo2 = settings.prevMemo1;
             settings.prevMemo1 = previousMemoSnapshot;
-            settings.currentMemo = merged;
-
-            syncQuestsFromMemo(merged);
-            updateUIMemo(merged);
+            settings.currentMemo = applyQuestSyncAndStripMemo(merged);
+            updateUIMemo(settings.currentMemo);
             syncMemoView();
             refreshRenderedView();
             saveSettings();
@@ -2555,7 +2555,7 @@ function loadProfile(name) {
     s.customFields = p.customFields ? JSON.parse(JSON.stringify(p.customFields)) : [];
     // quests are always derived from currentMemo — never from the profile snapshot
     s.quests = [];
-    syncQuestsFromMemo(s.currentMemo);
+    s.currentMemo = applyQuestSyncAndStripMemo(s.currentMemo);
     s.lastDelta = p.lastDelta ?? '';
     s.routerLookback = p.routerLookback || 4;
     s.routerDirectPrompt = p.routerDirectPrompt || '';
@@ -3251,6 +3251,18 @@ Gear:
         });
     }
 
+    const onboardingShowArchiveCb = el.querySelector('#rt_onboarding_quests_show_archive');
+    if (onboardingShowArchiveCb) {
+        onboardingShowArchiveCb.checked = s.syspromptModules?.questsShowArchive !== false;
+        onboardingShowArchiveCb.addEventListener('change', () => {
+            syncSettingsAndUI(settings => {
+                if (!settings.syspromptModules) settings.syspromptModules = {};
+                settings.syspromptModules.questsShowArchive = !!onboardingShowArchiveCb.checked;
+            });
+            refresh();
+        });
+    }
+
 
     // Optional Components Sync
     const syncOptionalMod = (onboardingId, settingKey) => {
@@ -3342,6 +3354,17 @@ Gear:
             toastr['success']('System prompt applied! \u2705', 'RPG Tracker');
         });
     }
+
+    el.querySelectorAll('.rt-quest-dismiss-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const questId = btn.getAttribute('data-quest-id');
+            if (!questId) return;
+            removeArchivedQuest(questId);
+            saveSettings();
+            refresh();
+        });
+    });
 
     el.querySelectorAll('.rt-section-header').forEach(header => {
         // Unbind to prevent duplicate listeners
@@ -3517,25 +3540,43 @@ Gear:
 }
 
 /**
- * Quests for UI display: memo is authoritative for any quest it lists; settings.quests
- * only supplies completed/failed entries stripped from the memo for AI context.
+ * Quests for UI display: active quests from memo; archived from settings.quests when enabled.
  * @param {string} memoText
  * @returns {any[]}
  */
 function getDisplayQuests(memoText) {
     const s = getSettings();
+    const showArchive = s.syspromptModules?.questsShowArchive !== false;
     const memoQuests = parseQuestsFromMemo(memoText);
+    const activeFromMemo = memoQuests.filter(q => !isArchivedQuestStatus(q.status));
+
+    if (!showArchive) {
+        return activeFromMemo;
+    }
+
+    const memoIds = new Set(memoQuests.map(q => q.id));
+    const archivedFromSettings = (s.quests || []).filter(q =>
+        isArchivedQuestStatus(q.status) && !memoIds.has(q.id)
+    );
+    // Include archived rows still in memo until the next strip pass
+    const archivedFromMemo = memoQuests.filter(q => isArchivedQuestStatus(q.status));
+
+    const seen = new Set();
+    /** @type {any[]} */
+    const deduped = [];
+    for (const q of [...activeFromMemo, ...archivedFromMemo, ...archivedFromSettings]) {
+        if (!q?.id || seen.has(q.id)) continue;
+        seen.add(q.id);
+        deduped.push(q);
+    }
+
     if (memoQuests.length > 0 || /\[QUESTS\]/i.test(memoText || '')) {
-        const memoIds = new Set(memoQuests.map(q => q.id));
-        const strippedCompleted = (s.quests || []).filter(q =>
-            (q.status === 'completed' || q.status === 'failed') && !memoIds.has(q.id)
-        );
-        return [...memoQuests, ...strippedCompleted];
+        return deduped;
     }
     if (_historyViewIndex === -1 && s.quests && s.quests.length > 0) {
         return s.quests;
     }
-    return memoQuests;
+    return activeFromMemo;
 }
 
 function refreshRenderedView() {
@@ -8298,9 +8339,7 @@ Rules:
         if (_historyViewIndex !== -1) return;
         const newText = /** @type {HTMLTextAreaElement} */ (e.target).value;
         settings.currentMemo = newText;
-
-        // Sync internal quest state
-        syncQuestsFromMemo(newText);
+        settings.currentMemo = applyQuestSyncAndStripMemo(settings.currentMemo);
 
         panel.querySelector('#rpg-tracker-count').textContent = `~${Math.round(settings.currentMemo.length / 2.62)} tokens`;
         saveSettings();
@@ -8761,10 +8800,13 @@ function syncMemoView() {
         deltaPanel.innerHTML = deltaHtml;
     }
 
-    // Keep settings.quests aligned with the live memo (rollback/restore only updates
-    // currentMemo — without this, stale completed quests bleed into the UI).
+    // Keep settings.quests aligned with the live memo (rollback/restore only updates currentMemo).
     if (_historyViewIndex === -1) {
-        syncQuestsFromMemo(s.currentMemo);
+        const stripped = applyQuestSyncAndStripMemo(s.currentMemo);
+        if (stripped !== s.currentMemo) {
+            s.currentMemo = stripped;
+            updateUIMemo(stripped);
+        }
         void syncCombatProfile(s.currentMemo, s);
     }
 
@@ -9685,6 +9727,8 @@ export function syncSettingsAndUI(updateFn) {
     if (frustrationWrapEl) frustrationWrapEl.style.display = !!fresh.syspromptModules?.questsDeadlines ? '' : 'none';
     const difficultyCb = /** @type {HTMLInputElement|null} */ (document.getElementById('rpg_quests_difficulty'));
     if (difficultyCb) difficultyCb.checked = !!fresh.syspromptModules?.questsDifficulty;
+    const showArchiveCb = /** @type {HTMLInputElement|null} */ (document.getElementById('rpg_quests_show_archive'));
+    if (showArchiveCb) showArchiveCb.checked = fresh.syspromptModules?.questsShowArchive !== false;
 
     // Optional components
     const mods = { 'loot': '#rpg_sysprompt_mod_loot', 'random_events': '#rpg_sysprompt_mod_random_events', 'resting': '#rpg_sysprompt_mod_resting' };
@@ -12600,6 +12644,18 @@ RULES:
                 refreshOrderList();
                 saveSettings();
                 scheduleAutoApply();
+                refreshRenderedView();
+            });
+        }
+
+        const showArchiveCb = /** @type {HTMLInputElement|null} */ (document.getElementById('rpg_quests_show_archive'));
+        if (showArchiveCb) {
+            showArchiveCb.checked = getSettings().syspromptModules?.questsShowArchive !== false;
+            showArchiveCb.addEventListener('change', function () {
+                const fresh = getSettings();
+                if (!fresh.syspromptModules) fresh.syspromptModules = {};
+                fresh.syspromptModules.questsShowArchive = !!this.checked;
+                saveSettings();
                 refreshRenderedView();
             });
         }

@@ -343,8 +343,8 @@ export function writeQuestsToMemo(quests, memoText = null) {
     const pattern = new RegExp(`\\s*\\[${escapedTag}\\][\\s\\S]*?\\[\\/${escapedTag}\\]`, 'i');
     const blockExists = pattern.test(target);
 
-    // Filter out completed/failed quests to save AI context space
-    const activeQuests = quests.filter(q => q.status !== 'completed' && q.status !== 'failed');
+    // Filter out archived quests to save AI context space
+    const activeQuests = quests.filter(q => !isArchivedQuestStatus(q.status));
 
     // If no active quests, remove the block if present — never insert an empty one
     if (!activeQuests || !activeQuests.length) {
@@ -378,51 +378,71 @@ export function syncQuestsToMemo() {
 }
 
 /**
- * Strips completed quests from the [QUESTS] block inside a raw memo string.
- * Completed quests are kept in settings.quests for UI display but must NEVER
- * appear in the Prior Memo sent to the AI — they are read-only history.
- * Works for both legacy plain-text and JSON quest formats.
- * Pure function — no side effects.
+ * Whether a quest status is archived (removed from memo, shown in completed/failed UI).
+ * @param {string} [status]
+ */
+export function isArchivedQuestStatus(status) {
+    const s = String(status || '').toLowerCase().trim();
+    return s === 'completed' || s === 'failed' || s === 'past deadline';
+}
+
+/**
+ * Split plain-text [QUESTS] inner content into per-quest blocks (QUEST: … boundaries).
+ * @param {string} content
+ * @returns {string[]|null} null if not plain-text quest format
+ */
+function splitQuestTextBlocks(content) {
+    if (!content || !/^QUEST:/m.test(content)) return null;
+    return content.split(/^(?=QUEST:\s)/m).filter(b => b.trim());
+}
+
+/** @param {string} block */
+function questTextBlockIsArchived(block) {
+    const m = block.match(/^\s*STATUS:\s*(.+)$/im);
+    if (!m) return false;
+    return isArchivedQuestStatus(m[1].trim());
+}
+
+/**
+ * Strips archived quests (completed/failed/past deadline) from the [QUESTS] block.
+ * Uses QUEST: line boundaries so only individual quest blocks are removed.
  * @param {string} memoText
  * @returns {string}
  */
-export function stripCompletedQuestsFromMemo(memoText) {
+export function stripArchivedQuestsFromMemo(memoText) {
     if (!memoText) return memoText;
     const questBlockRe = /\[QUESTS\]([\s\S]*?)\[\/QUESTS\]/i;
     const match = memoText.match(questBlockRe);
     if (!match) return memoText;
 
     const content = match[1].trim();
+    const blocks = splitQuestTextBlocks(content);
 
-    // ── Plain-text format ──────────────────────────────────────────────────────
-    // The State Tracker writes the full [QUESTS] text block directly.
-    // mergeMemo pastes it into currentMemo verbatim — no filter runs at write time.
-    // We split on QUEST: boundaries and drop any block with STATUS: completed.
-    if (/^QUEST:/m.test(content)) {
-        // Split on the start of each "QUEST:" line, keeping the delimiter.
-        // content already starts with "QUEST:", so no prepend needed.
-        const questBlocks = content.split(/^(?=QUEST:)/m).filter(Boolean);
-        const active = questBlocks.filter(block => !/^\s*STATUS:\s*completed\s*$/im.test(block));
-        if (active.length === questBlocks.length) return memoText; // nothing to strip
+    if (blocks) {
+        const active = blocks.filter(b => !questTextBlockIsArchived(b));
+        if (active.length === blocks.length) return memoText;
         const newContent = active.map(b => b.trim()).join('\n\n').trim();
-        if (!newContent) return memoText.replace(questBlockRe, '').replace(/\n{3,}/g, '\n\n').trim();
+        if (!newContent) {
+            return memoText.replace(questBlockRe, '').replace(/\n{3,}/g, '\n\n').trim();
+        }
         return memoText.replace(questBlockRe, `[QUESTS]\n${newContent}\n[/QUESTS]`);
     }
 
-    // ── JSON / Tool-call format ───────────────────────────────────────────────
-    // writeQuestsToMemo already filters completed at write time, so this branch
-    // is a safety net for any edge case that bypasses that path.
+    // JSON / tool-call format fallback
     try {
         const parsed = JSON.parse(content);
         const quests = Array.isArray(parsed) ? parsed : (parsed.quests || []);
-        const active = quests.filter(q => q.status !== 'completed');
-        if (active.length === quests.length) return memoText; // nothing to strip
+        const active = quests.filter(q => !isArchivedQuestStatus(q.status));
+        if (active.length === quests.length) return memoText;
         if (!active.length) return memoText.replace(questBlockRe, '').replace(/\n{3,}/g, '\n\n').trim();
         return memoText.replace(questBlockRe, `[QUESTS]\n${JSON.stringify(active, null, 2)}\n[/QUESTS]`);
     } catch {
-        return memoText; // unparseable — leave it alone
+        return memoText;
     }
 }
+
+/** @deprecated Use stripArchivedQuestsFromMemo */
+export const stripCompletedQuestsFromMemo = stripArchivedQuestsFromMemo;
 
 // ── Legacy quest text format ───────────────────────────────────────────────────
 
@@ -638,35 +658,61 @@ export function syncQuestsFromMemo(memoText) {
     }
 
     const quests = parseQuestsFromMemo(memoText);
-    const existingCompleted = (settings.quests || []).filter(q => q.status === 'completed' || q.status === 'failed');
+    const existingArchived = (settings.quests || []).filter(q => isArchivedQuestStatus(q.status));
 
     if (quests.length === 0) {
-        const match = (memoText || '').match(/\[QUESTS\]([\s\S]*?)\[\/QUESTS\]/i);
-        if (!match && settings.quests && settings.quests.length > 0) {
-            if (settings.quests.length !== existingCompleted.length && settings.debugMode) {
+        const blockMatch = (memoText || '').match(/\[QUESTS\]([\s\S]*?)\[\/QUESTS\]/i);
+        if (!blockMatch && settings.quests && settings.quests.length > 0) {
+            if (settings.quests.length !== existingArchived.length && settings.debugMode) {
                 console.log('[RPG Tracker] syncQuestsFromMemo: active quests cleared because [QUESTS] block was removed.');
             }
-            settings.quests = existingCompleted;
+            settings.quests = existingArchived;
         } else if (settings.quests && settings.quests.length > 0) {
-            settings.quests = existingCompleted;
+            settings.quests = existingArchived;
         }
         return;
     }
 
-    // Merge parsed memo quests with completed/failed entries stripped from the memo
-    // (writeQuestsToMemo removes them to save AI context). Memo wins for any quest
-    // id it contains — rollback to an earlier active state must not preserve stale
-    // completed entries from settings.quests.
+    // Merge parsed memo quests with archived entries stripped from the memo.
+    // Memo wins for any quest id it contains — rollback must not preserve stale archive rows.
     const newIds = new Set(quests.map(q => q.id));
-    const merged = [...quests];
-    for (const eq of existingCompleted) {
+    const merged = quests.filter(q => !isArchivedQuestStatus(q.status));
+    for (const eq of existingArchived) {
         if (!newIds.has(eq.id)) {
             merged.push(eq);
+        }
+    }
+    // Also pick up newly archived quests the model still had in the memo this pass
+    for (const q of quests) {
+        if (isArchivedQuestStatus(q.status)) {
+            const idx = merged.findIndex(m => m.id === q.id);
+            if (idx >= 0) merged[idx] = q;
+            else merged.push(q);
         }
     }
 
     settings.quests = merged;
     if (settings.debugMode) console.log(`[RPG Tracker] syncQuestsFromMemo: updated internal state with ${merged.length} quest(s).`);
+}
+
+/**
+ * Syncs settings.quests from memo, then returns memo with archived quests stripped.
+ * @param {string} memoText
+ * @returns {string}
+ */
+export function applyQuestSyncAndStripMemo(memoText) {
+    syncQuestsFromMemo(memoText);
+    return stripArchivedQuestsFromMemo(memoText);
+}
+
+/**
+ * Removes a completed/failed quest from the archive (settings.quests).
+ * @param {string} questId
+ */
+export function removeArchivedQuest(questId) {
+    if (!questId) return;
+    const settings = getSettings();
+    settings.quests = (settings.quests || []).filter(q => q.id !== questId);
 }
 
 // ── Delta display ─────────────────────────────────────────────────────────────

@@ -253,7 +253,8 @@ You may be asked to use Markers: ((PLS)), ((B)), ((XB)), ((BDG)), ((HGT)). These
             quests: true,
             questsDeadlines: false,
             questsFrustration: false,
-            questsDifficulty: false
+            questsDifficulty: false,
+            questsShowArchive: true,
         },
         routerEnabled: true,
         routerLog: [],
@@ -776,6 +777,14 @@ Example: [[FAC: Iron Syndicate | ...]]  NOT  [[FAC: Khelt :: Iron Syndicate | ..
     if (!s.settingsVersion || s.settingsVersion < '3.16.21') {
         if (s.npcPortraits === undefined) s.npcPortraits = true;
         s.settingsVersion = '3.16.21';
+    }
+
+    // Quest archive UI toggle default (v3.16.22)
+    if (!s.settingsVersion || s.settingsVersion < '3.16.22') {
+        if (s.syspromptModules && s.syspromptModules.questsShowArchive === undefined) {
+            s.syspromptModules.questsShowArchive = true;
+        }
+        s.settingsVersion = '3.16.22';
     }
 
     // ── MIGRATION: Update system prompts with keywords instructions (v3.2.3+) ──────

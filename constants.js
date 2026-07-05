@@ -125,7 +125,7 @@ Current Time: HH:MM AM/PM, Day N
 
 'Last Rest' is ONLY triggered on Long Rest, NOT Short Rest (when Hit Dice, etc, are spent.) If the [TIME] delta between PREVIOUS STATE MEMO and your current update is only an hour, it is a Short Rest.`,
   xp: "Character Level and Experience Points (XP). Format as `Level: X | XP: current/max`. You MUST output this field whenever the narrative mentions gaining experience or leveling up.",
-  quests: `Track quests using the [QUESTS] block. Maintain the COMPLETE list of all quests at all times — active, completed, and failed. Only add a quest if [QUEST ACCEPTED] is outputted in the narrative. NEVER ADD A QUEST UNLESS YOU SEE [QUEST ACCEPTED]. A quest simply being listed does not mean it is accepted.
+  quests: `Track quests using the [QUESTS] block. The block lists **active** quests only. When a quest is completed or failed, set STATUS: completed or STATUS: failed on that quest in your output — the tracker archives it automatically and removes it from the memo. Only add a quest if [QUEST ACCEPTED] is outputted in the narrative. NEVER ADD A QUEST UNLESS YOU SEE [QUEST ACCEPTED]. A quest simply being listed does not mean it is accepted.
 
 Format each quest exactly as shown:
 
@@ -151,8 +151,8 @@ QUEST: The Missing Sheep
 - For rewards, use the REWARD marker (e.g. REWARD: 50 Gold). List multiple rewards on separate lines.
 - For difficulty, use the DIFFICULTY marker (Very Easy, Easy, Medium, Hard, Very Hard).
 - The MOOD field is calculated by the engine based on time pressure and the frustration coefficient. Use this to guide how the NPC speaks and acts.
-- Never delete old quests. Keep completed/failed ones with updated STATUS.
-- If no quests exist yet, emit [QUESTS][/QUESTS] (empty).`,
+- When a quest completes or fails, set STATUS accordingly; do not keep archived quests in [QUESTS].
+- If no active quests exist, emit [QUESTS][/QUESTS] (empty).`,
   time_24h: `Current time and day grabbed from the status footer. Also track time of the last rest (only on Long Rest, e.g. 'Last Rest: 22:00, Day 0'). Use this to track out-of-combat buff durations by comparing to the PRIOR MEMO's time.
 
 Format (24-hour clock, NO AM/PM):

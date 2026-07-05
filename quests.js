@@ -4,7 +4,7 @@
  */
 
 import { getSettings } from './state-manager.js';
-import { parseQuestsFromMemo, writeQuestsToMemo, parseInWorldTime } from './memo-processor.js';
+import { parseQuestsFromMemo, writeQuestsToMemo, parseInWorldTime, isArchivedQuestStatus } from './memo-processor.js';
 
 /**
  * Unregisters the deprecated LogQuest tool if it was left registered from a prior version.
@@ -98,7 +98,16 @@ export function checkQuestDeadlines() {
     }
     
     if (changed) {
-        writeQuestsToMemo(quests);
+        const settings = getSettings();
+        for (const quest of quests) {
+            if (!isArchivedQuestStatus(quest.status)) continue;
+            const list = settings.quests || [];
+            const idx = list.findIndex(q => q.id === quest.id);
+            if (idx >= 0) list[idx] = quest;
+            else list.push(quest);
+            settings.quests = list;
+        }
+        writeQuestsToMemo(settings.quests);
         SillyTavern.getContext().saveSettingsDebounced();
     }
 }

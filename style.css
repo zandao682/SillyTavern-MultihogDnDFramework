@@ -2166,6 +2166,22 @@
 .rt-quest-badge-completed { background: rgba(80,160,255,0.15); color: #50a0ff; border: 1px solid rgba(80,160,255,0.3); }
 .rt-quest-badge-failed    { background: rgba(255,60,60,0.15);  color: #ff5555; border: 1px solid rgba(255,60,60,0.3); }
 
+.rt-quest-dismiss-btn {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 3px;
+    color: rgba(255,255,255,0.45);
+    cursor: pointer;
+    font-size: 0.75em;
+    line-height: 1;
+    padding: 1px 5px;
+    margin-left: 4px;
+}
+.rt-quest-dismiss-btn:hover {
+    color: #ff7777;
+    border-color: rgba(255,100,100,0.45);
+}
+
 .rt-quest-giver {
     font-size: 0.82em;
     color: var(--rt-text-muted);
