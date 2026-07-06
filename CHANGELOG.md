@@ -2,7 +2,7 @@
 
 All notable changes to the **Multihog D&D Framework** will be documented in this file.
 
-## [4.4.3] - 2026-07-06
+## [4.5.0] - 2026-07-06
 
 ### Added
 - **Optimized UI Toggles**: Moved all layout collapse/expand and view state flags (including panels, drawers, console, modular repertoire, world progression, active keys drawer, and Raw View toggle) to browser `localStorage` to completely bypass global settings serialization, resolving the 1-second lag post-click.
