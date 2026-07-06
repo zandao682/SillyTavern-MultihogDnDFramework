@@ -3078,6 +3078,36 @@
 .rt-npc-bar-value.val-affection-positive { color: #f472b6; }
 .rt-npc-bar-value.val-affection-negative { color: #a855f7; }
 
+/* ── NPC Relationship Tier Badges ── */
+.rt-npc-tier-row {
+    display: flex;
+    gap: 5px;
+    margin-top: 3px;
+    flex-wrap: wrap;
+}
+.rt-npc-tier-badge {
+    display: inline-block;
+    font-size: 7px;
+    font-weight: bold;
+    letter-spacing: 0.3px;
+    padding: 2px 7px;
+    border-radius: 8px;
+    white-space: nowrap;
+    text-transform: uppercase;
+    cursor: default;
+    transition: color 0.25s ease, background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+.rt-npc-tier-detailed {
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    line-height: 1.4;
+    transition: background 0.25s ease, border-color 0.25s ease;
+}
+.rt-npc-tier-detailed-label { font-weight: bold; margin-right: 4px; transition: color 0.25s ease; }
+.rt-npc-tier-detailed-hint { opacity: 0.7; color: var(--SmartThemeBodyColor, inherit); }
+
 /* ── NPC Card Actions ── */
 .rt-npc-actions {
     display: flex;

@@ -12,7 +12,7 @@
  * circular import. This will be cleaned up when index.js is split.
  */
 
-import { getSettings, hydrateWorldProgressionFromChatState, persistWorldProgressionTimer, persistRouterLastRunWatermark, getNpcRelationshipMax, clampRelationshipValue, relationshipBarPct, getFriendshipTier, getAffectionTier } from './state-manager.js';
+import { getSettings, hydrateWorldProgressionFromChatState, persistWorldProgressionTimer, persistRouterLastRunWatermark, getNpcRelationshipMax, clampRelationshipValue, relationshipBarPct, getFriendshipTier, getAffectionTier, applyRelTierBadgeElement } from './state-manager.js';
 import { syncCombatProfile } from './llm-client.js';
 import { parseQuestsFromMemo, extractCurrentTimeStr, cleanMessageContent, formatInWorldTime } from './memo-processor.js';
 import { runRouterPass, saveSceneToLorebook, scanAssistantOutputForKeywords, parseInWorldMinutes, runWorldProgressionPass, updateLorebookEntry, getLorebookManifest } from './router.js';
@@ -1287,6 +1287,10 @@ function refreshRelationshipBarsDOM(settings) {
                 valSpan.className = `rt-npc-bar-value ${valClass}`;
                 valSpan.innerHTML = `${value > 0 ? '+' : ''}${value}${badgeHtml}`;
             }
+
+            // Update tier badge (compact, intensity-scaled color) if present
+            const tierBadge = card.querySelector(`.rt-npc-tier-badge.${type}`);
+            if (tierBadge) applyRelTierBadgeElement(tierBadge, type, value, relMax);
         }
     }
 }

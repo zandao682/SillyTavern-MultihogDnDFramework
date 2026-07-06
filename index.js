@@ -1,5 +1,5 @@
 import { EXAMPLES, COLOR_EXAMPLES, DEFAULT_STOCK_PROMPTS, RT_PROMPTS, BLOCK_ICONS, BLOCK_ORDER, PAGE_SIZE, NO_PAGINATE, QUESTS_NARRATOR, buildOnboardingXpHint, resolveTimePromptKey, resolveTimePromptDisplayTag } from './constants.js';
-import { MODULE_NAME, DEFAULT_MODULES, getSettings, getBarBackground, migrateCustomFields, saveChatState, saveProfile, deleteProfile, getEffectiveRouterCampaignPrefix, sanitizeCampaignPrefixString, buildNpcInstruction, loadStockPromptsFromProfile, getNpcRelationshipMax, getNpcRelationshipMaxDefault, clampRelationshipValue, relationshipBarPct, buildRelationshipTrackingSysprompt } from './state-manager.js';
+import { MODULE_NAME, DEFAULT_MODULES, getSettings, getBarBackground, migrateCustomFields, saveChatState, saveProfile, deleteProfile, getEffectiveRouterCampaignPrefix, sanitizeCampaignPrefixString, buildNpcInstruction, loadStockPromptsFromProfile, getNpcRelationshipMax, getNpcRelationshipMaxDefault, clampRelationshipValue, relationshipBarPct, buildRelationshipTrackingSysprompt, getFriendshipTier, getAffectionTier, getRelTierBadgeStyle, getRelTierDetailedStyle, getRelTierDetailedLabelStyle, applyRelTierBadgeElement } from './state-manager.js';
 import { sendStateRequest, fetchOllamaModels, fetchOpenAIModels, testOpenAIConnection, getConnectionProfiles, getCurrentCompletionPreset, setCompletionPreset, syncCombatProfile, resetCombatProfileOverride } from './llm-client.js';
 import { getDiceToolName, getDiceCommandName, getDiceCommandAliases, doDiceRoll, registerDiceFunctionTool, registerDiceSlashCommand, installInterceptor, getNarrativeBlocks, onGenerationStarted, onGenerationEnded, ensureRelTagRegex, resetRouterTick, getRouterTick, resetRouterAutoTick, makeRngQueue, buildRngBlock, RNG_QUEUE_LEN, parseAndApplyNarrativeRelTags } from './narrative-hooks.js';
 import { deduplicateMemo, mergeMemo, computeDelta, escapeHtml, escapeRegex, highlightParens, cleanToolCallMessage, cleanMessageContent, getLastUserAction, buildLorebookContext, buildModulesInstructionText, buildModuleFormatInstruction, parseQuestsFromMemo, syncQuestsFromMemo, syncQuestsToMemo, writeQuestsToMemo, getQuestMood, extractCurrentTimeStr, stripArchivedQuestsFromMemo, stripCompletedQuestsFromMemo, applyQuestSyncAndStripMemo, isArchivedQuestStatus, removeArchivedQuest, parseInWorldTime, formatInWorldTime, sanitizeLorebookRecordContent } from './memo-processor.js';
@@ -83,6 +83,27 @@ const refreshAll = () => {
         void refreshNpcManifest().catch(() => {});
     }
 };
+
+/** Compact colored tier badge (e.g. "FRIENDLY") — hint shown as a tooltip. Used in NPC grid cards. */
+function renderRelTierBadge(type, value, max) {
+    const tier = type === 'friendship' ? getFriendshipTier(value, max) : getAffectionTier(value, max);
+    return `<span class="rt-npc-tier-badge ${type}" style="${getRelTierBadgeStyle(type, value, max)}" title="${escapeHtml(tier.hint)}">${escapeHtml(tier.label)}</span>`;
+}
+
+/** Row of both tier badges (friendship + affection) for the NPC grid card. */
+function renderRelTierRow(friendshipVal, affectionVal, max) {
+    return `<div class="rt-npc-tier-row">${renderRelTierBadge('friendship', friendshipVal, max)}${renderRelTierBadge('affection', affectionVal, max)}</div>`;
+}
+
+/** Full "Friendship tier: FRIENDLY — genuine warmth..." block with visible hint text. Used in the NPC detail popup. */
+function renderRelTierDetailed(type, value, max) {
+    const tier = type === 'friendship' ? getFriendshipTier(value, max) : getAffectionTier(value, max);
+    const axisLabel = type === 'friendship' ? 'Friendship' : 'Affection';
+    return `<div class="rt-npc-tier-detailed ${type}" style="${getRelTierDetailedStyle(type, value, max)}">
+        <span class="rt-npc-tier-detailed-label" style="${getRelTierDetailedLabelStyle(type, value, max)}">${axisLabel} tier: ${escapeHtml(tier.label)}</span>
+        <span class="rt-npc-tier-detailed-hint">— ${escapeHtml(tier.hint)}</span>
+    </div>`;
+}
 
 function isAgentPanelVisible() {
     const el = document.getElementById('rpg-tracker-agent');
@@ -5857,19 +5878,22 @@ function createPanel() {
                                 const isPos = clamped >= 0;
                                 const bgColor = isPos ? colorPos : colorNeg;
                                 const valColor = clamped === 0 ? 'var(--SmartThemeEmColor, inherit)' : bgColor;
-                                return `<div style="display:grid;grid-template-columns:auto 80px 1fr 40px;align-items:center;column-gap:12px;row-gap:6px;margin-bottom:14px;">
-                                    <span style="font-size:20px;">${icon}</span>
-                                    <span style="font-size:13px;color:var(--SmartThemeBodyColor, inherit);opacity:0.65;font-weight:500;">${label}</span>
-                                    <div style="height:12px;background:var(--SmartThemeBorderColor, rgba(128,128,128,0.15));border-radius:6px;position:relative;overflow:hidden;">
-                                        <div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--SmartThemeBorderColor, rgba(128,128,128,0.25));"></div>
-                                        <div id="rt-npc-detail-${type}-fill" style="position:absolute;top:0;bottom:0;border-radius:6px;background:${bgColor};${isPos ? `left:50%;width:${pct}%;` : `right:50%;width:${pct}%;`}transition:width 0.3s ease;"></div>
+                                return `<div style="margin-bottom:14px;">
+                                    <div style="display:grid;grid-template-columns:auto 80px 1fr 40px;align-items:center;column-gap:12px;row-gap:6px;">
+                                        <span style="font-size:20px;">${icon}</span>
+                                        <span style="font-size:13px;color:var(--SmartThemeBodyColor, inherit);opacity:0.65;font-weight:500;">${label}</span>
+                                        <div style="height:12px;background:var(--SmartThemeBorderColor, rgba(128,128,128,0.15));border-radius:6px;position:relative;overflow:hidden;">
+                                            <div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--SmartThemeBorderColor, rgba(128,128,128,0.25));"></div>
+                                            <div id="rt-npc-detail-${type}-fill" style="position:absolute;top:0;bottom:0;border-radius:6px;background:${bgColor};${isPos ? `left:50%;width:${pct}%;` : `right:50%;width:${pct}%;`}transition:width 0.3s ease;"></div>
+                                        </div>
+                                        <span id="rt-npc-detail-${type}-text" style="font-size:15px;font-weight:bold;text-align:right;color:${valColor};font-family:monospace;">${clamped > 0 ? '+' : ''}${clamped}</span>
+                                        <div></div>
+                                        <div></div>
+                                        <input type="range" id="rt-npc-detail-${type}-slider" min="-${relMax}" max="${relMax}" value="${clamped}" step="1"
+                                            style="width:100%;margin:0;accent-color:${bgColor};height:4px;cursor:pointer;outline:none;">
+                                        <div></div>
                                     </div>
-                                    <span id="rt-npc-detail-${type}-text" style="font-size:15px;font-weight:bold;text-align:right;color:${valColor};font-family:monospace;">${clamped > 0 ? '+' : ''}${clamped}</span>
-                                    <div></div>
-                                    <div></div>
-                                    <input type="range" id="rt-npc-detail-${type}-slider" min="-${relMax}" max="${relMax}" value="${clamped}" step="1"
-                                        style="width:100%;margin:0;accent-color:${bgColor};height:4px;cursor:pointer;outline:none;">
-                                    <div></div>
+                                    <div id="rt-npc-detail-${type}-tier">${renderRelTierDetailed(type, clamped, relMax)}</div>
                                 </div>`;
                             };
 
@@ -6007,13 +6031,15 @@ function createPanel() {
                                 const slider = popupDom.querySelector(`#rt-npc-detail-${type}-slider`);
                                 const fill = popupDom.querySelector(`#rt-npc-detail-${type}-fill`);
                                 const text = popupDom.querySelector(`#rt-npc-detail-${type}-text`);
+                                const tierEl = popupDom.querySelector(`#rt-npc-detail-${type}-tier`);
                                 if (!slider || !fill || !text) return;
                                 
                                 let originalValue = parseInt(slider.value, 10) || 0;
                                 
                                 slider.addEventListener('input', () => {
                                     const val = parseInt(slider.value, 10) || 0;
-                                    const pct = relationshipBarPct(val, getNpcRelationshipMax(s));
+                                    const relMax = getNpcRelationshipMax(s);
+                                    const pct = relationshipBarPct(val, relMax);
                                     const isPos = val >= 0;
                                     fill.style.width = pct + '%';
                                     fill.style.left = isPos ? '50%' : 'auto';
@@ -6026,6 +6052,8 @@ function createPanel() {
                                     
                                     text.textContent = (val > 0 ? '+' : '') + val;
                                     text.style.color = val === 0 ? 'var(--SmartThemeEmColor, inherit)' : bgColor;
+
+                                    if (tierEl) tierEl.innerHTML = renderRelTierDetailed(type, val, relMax);
                                 });
                                 
                                 slider.addEventListener('change', () => {
@@ -6073,6 +6101,9 @@ function createPanel() {
                                                 }
                                             }
                                         }
+
+                                        const tierBadge = cardEl.querySelector(`.rt-npc-tier-badge.${type}`);
+                                        if (tierBadge) applyRelTierBadgeElement(tierBadge, type, val, getNpcRelationshipMax(s));
                                     }
                                 });
                             };
@@ -6158,7 +6189,7 @@ function createPanel() {
                                     ${s.npcRelationshipBars && renderRelBar ? `<div class="rt-npc-bars">
                                         ${renderRelBar(rel.friendship, 'friendship', item.id)}
                                         ${renderRelBar(rel.affection, 'affection', item.id)}
-                                    </div>` : ''}
+                                    </div>${renderRelTierRow(rel.friendship, rel.affection, getNpcRelationshipMax(s))}` : ''}
                                     <div class="rt-npc-actions">
                                         <button class="rt-npc-action-btn rt-npc-view" data-id="${item.id}" title="View NPC card"><i class="fa-solid fa-address-card"></i> Full NPC Card</button>
                                         <button class="rt-npc-action-btn rt-npc-edit" data-id="${item.id}" title="Edit entry"><i class="fa-solid fa-pen-to-square"></i></button>

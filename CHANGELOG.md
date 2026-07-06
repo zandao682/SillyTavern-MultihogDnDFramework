@@ -2,6 +2,15 @@
 
 All notable changes to the **Multihog D&D Framework** will be documented in this file.
 
+## [4.4.1] - 2026-07-06
+
+### Added
+- **Relationship tier badges in UI**: NPC grid cards and detail popup show live Friendship/Affection tier labels (same logic as `[NPC_RELATIONS]`), with intensity-scaled pill colors that grow greener/pinker toward max.
+
+### Changed
+- **Tier thresholds rebalanced**: Wider neutral band (25% of max) so early positive values no longer jump to FRIENDLY too quickly.
+- **Affection neutral tier**: Renamed from NEUTRAL CURIOSITY to NEUTRAL/NO AFFECTION for clarity.
+
 ## [4.4.0] - 2026-07-06
 
 ### Added
