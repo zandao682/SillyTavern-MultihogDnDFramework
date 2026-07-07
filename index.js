@@ -6252,7 +6252,11 @@ function createPanel() {
                         portraitWrap.addEventListener('click', async (e) => {
                             e.stopPropagation();
                             if (typeof showPortraitSettingsMenu === 'function') {
-                                await showPortraitSettingsMenu(pc.name, refreshManifest, pc.bio || '');
+                                const refreshBoth = () => {
+                                    if (typeof refreshManifest === 'function') refreshManifest();
+                                    if (typeof refreshRenderedView === 'function') refreshRenderedView();
+                                };
+                                await showPortraitSettingsMenu(pc.name, refreshBoth, pc.bio || '');
                             }
                         });
                     }
@@ -7123,7 +7127,11 @@ function createPanel() {
                             if (portraitWrap) {
                                 portraitWrap.addEventListener('click', async (e) => {
                                     e.stopPropagation();
-                                    await showPortraitSettingsMenu(item.label, refreshManifest, item.content || '');
+                                    const refreshBoth = () => {
+                                        if (typeof refreshManifest === 'function') refreshManifest();
+                                        if (typeof refreshRenderedView === 'function') refreshRenderedView();
+                                    };
+                                    await showPortraitSettingsMenu(item.label, refreshBoth, item.content || '');
                                 });
                             }
 
