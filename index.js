@@ -2864,7 +2864,7 @@ Rules:
 - Use the exact section headers shown above. Do not add extra sections or merge them.
 - Total word count across all sections: approximately ${wordCount} words.
 - Write in third person (he/she/they).
-- Keep the prose grounded and natural. Avoid overly dramatic purple prose, excessive em-dashes, or clichés (e.g. "deliberate step", "breath hitched").
+- Keep the prose grounded and natural. Avoid purple prose, excessive em-dashes, or clichés (e.g. "deliberate step", "breath hitched").
 - Do not include a preamble, title, or closing statement. Output ONLY the four sections.
 - CRITICAL: You MUST faithfully and explicitly incorporate ALL provided traits, background hints, species, gender, and appearance hints from the character card and the PLAYER PREFERENCES. Do not ignore user-provided details.`;
     const userPrompt = `CHARACTER CARD:\n${cleanMemo.substring(0, 3000)}\n\nWrite the persona description for ${charName || 'this character'}.\nIMPORTANT REMINDER: The total word count across all sections MUST be approximately ${wordCount} words!`;
