@@ -7,10 +7,7 @@ import { renderSubFieldByRule, tryRenderMarker, renderCustomBlockLine, stripMemo
 import { unregisterLogQuestTool, checkQuestDeadlines, renderQuestsAsPlainText } from './quests.js';
 import { initializeDebugViewer, toggleDebugViewer } from './debug-viewer.js';
 import { runRouterPass, rollbackRouterPass, reapplyRouterPass, getLorebookManifest, deleteLorebookEntry, updateLorebookEntry, disableManagedEntries, isRouterRunning, stopRouterPass } from './router.js';
-import { getRequestHeaders, default_user_avatar } from '../../../../script.js';
-import { initPersona, setUserAvatar, getUserAvatars, setPersonaDescription, user_avatar, persona_description_positions } from '../../../personas.js';
-import { findPersona } from '../../../utils.js';
-import { power_user } from '../../../power-user.js';
+import { getRequestHeaders } from '../../../../script.js';
 import { fileToDataUrl, scaleImageTo512Square, applyPortraitData, generatePortraitPrompt, generateNpcPortraitPrompt, showPortraitPromptPopup, generatePortraitDirect, autoGeneratePartyPortraits, removeAllPortraits, checkAndTriggerAutoGenerations, autoGenerateEnemyPortraits, forceCheckAutoGenerations, resetAutoGenerationTracking } from './portraits.js';
 
 export const RENDERING_TAGS_LIBRARY = [
@@ -3078,8 +3075,9 @@ Rules:
  * Uploads a default avatar image for a newly created persona.
  * @param {string} url
  * @param {string} avatarId
+ * @param {() => Promise<void>} refreshAvatars
  */
-async function uploadDefaultPersonaAvatar(url, avatarId) {
+async function uploadDefaultPersonaAvatar(url, avatarId, refreshAvatars) {
     const fetchResult = await fetch(url);
     const blob = await fetchResult.blob();
     const file = new File([blob], 'avatar.png', { type: 'image/png' });
@@ -3097,16 +3095,29 @@ async function uploadDefaultPersonaAvatar(url, avatarId) {
         throw new Error(`Failed to upload persona avatar: ${response.statusText}`);
     }
     const data = await response.json();
-    await getUserAvatars(true, data?.path || avatarId);
+    await refreshAvatars(true, data?.path || avatarId);
 }
 
 /**
  * Creates or updates a real SillyTavern persona and selects it.
+ * Core ST modules are imported dynamically so extension startup is not blocked by circular deps.
  * @param {string} name
  * @param {string} description
  * @returns {Promise<string>} avatar id
  */
 async function injectAsSillyTavernPersona(name, description) {
+    const [
+        { initPersona, setUserAvatar, getUserAvatars, setPersonaDescription, user_avatar, persona_description_positions },
+        { findPersona },
+        { power_user },
+        { default_user_avatar },
+    ] = await Promise.all([
+        import('../../../personas.js'),
+        import('../../../utils.js'),
+        import('../../../power-user.js'),
+        import('../../../../script.js'),
+    ]);
+
     const trimmedName = name.trim() || 'My Character';
     const existing = findPersona({ name: trimmedName, preferCurrentPersona: false, quiet: true });
 
@@ -3131,7 +3142,7 @@ async function injectAsSillyTavernPersona(name, description) {
     } else {
         avatarId = `${Date.now()}-${trimmedName.replace(/[^a-zA-Z0-9]/g, '')}.png`;
         await initPersona(avatarId, trimmedName, description, '');
-        await uploadDefaultPersonaAvatar(default_user_avatar, avatarId);
+        await uploadDefaultPersonaAvatar(default_user_avatar, avatarId, getUserAvatars);
     }
 
     await setUserAvatar(avatarId);
@@ -11715,6 +11726,35 @@ function buildSysprompt(rawText) {
 }
 
 /**
+ * Binds a Connection Manager profile dropdown when the element and extension are available.
+ * @param {string} selector
+ * @param {string} initialProfileId
+ * @param {(profileId: string) => void} onProfileIdChange
+ * @returns {boolean}
+ */
+function tryBindConnectionProfileDropdown(selector, initialProfileId, onProfileIdChange) {
+    if (!$(selector).length) {
+        console.warn(`[RPG Tracker] Connection profile dropdown not found: ${selector}`);
+        return false;
+    }
+    const ctx = SillyTavern.getContext();
+    const svc = ctx.ConnectionManagerRequestService;
+    const cmDisabled = ctx.extensionSettings?.disabledExtensions?.includes('connection-manager');
+    if (!svc?.handleDropdown || cmDisabled) return false;
+    try {
+        svc.handleDropdown(
+            selector,
+            initialProfileId || '',
+            (profile) => onProfileIdChange(profile?.id || ''),
+        );
+        return true;
+    } catch (e) {
+        console.warn(`[RPG Tracker] Could not bind connection profile dropdown ${selector}:`, e);
+        return false;
+    }
+}
+
+/**
  * Initialization
  */
 (async function init() {
@@ -12249,20 +12289,20 @@ function buildSysprompt(rawText) {
         });
         updateCombatProfilePanel();
 
-        if (ctx.ConnectionManagerRequestService?.handleDropdown) {
-            /** @type {any} */ (ctx.ConnectionManagerRequestService).handleDropdown(combatProfileSelect[0]);
-            combatProfileSelect.val(settings.combatConnectionProfileId || '');
-        } else {
+        if (!tryBindConnectionProfileDropdown('#rpg_combat_connection_profile', settings.combatConnectionProfileId, (id) => {
+            settings.combatConnectionProfileId = id;
+            saveSettings();
+        })) {
             getConnectionProfiles().then(profiles => {
                 combatProfileSelect.empty().append('<option value="">-- No Profile Selected --</option>');
                 profiles.forEach(p => combatProfileSelect.append($('<option></option>').val(p).text(p)));
                 combatProfileSelect.val(settings.combatConnectionProfileId || '');
             });
+            combatProfileSelect.on('change', function () {
+                settings.combatConnectionProfileId = $(this).val();
+                saveSettings();
+            });
         }
-        combatProfileSelect.on('change', function () {
-            settings.combatConnectionProfileId = $(this).val();
-            saveSettings();
-        });
 
         const combatPresetSelect = $('#rpg_combat_completion_preset');
         if (pm && typeof pm.getAllPresets === 'function') {
@@ -12649,20 +12689,20 @@ function buildSysprompt(rawText) {
 
         // Profiles / Presets
         const portraitPresetSelect = $('#rpg_portrait_completion_preset');
-        if (ctx.ConnectionManagerRequestService?.handleDropdown) {
-            /** @type {any} */ (ctx.ConnectionManagerRequestService).handleDropdown(portraitProfileSelect[0]);
-            portraitProfileSelect.val(settings.portraitConnectionProfileId || "");
-        } else {
+        if (!tryBindConnectionProfileDropdown('#rpg_portrait_connection_profile', settings.portraitConnectionProfileId, (id) => {
+            settings.portraitConnectionProfileId = id;
+            saveSettings();
+        })) {
             getConnectionProfiles().then(profiles => {
                 portraitProfileSelect.empty().append('<option value="">-- No Profile Selected --</option>');
                 profiles.forEach(p => portraitProfileSelect.append($('<option></option>').val(p).text(p)));
                 portraitProfileSelect.val(settings.portraitConnectionProfileId || "");
             });
+            portraitProfileSelect.on('change', function () {
+                settings.portraitConnectionProfileId = $(this).val();
+                saveSettings();
+            });
         }
-        portraitProfileSelect.on('change', function () {
-            settings.portraitConnectionProfileId = $(this).val();
-            saveSettings();
-        });
 
         if (pm && typeof pm.getAllPresets === 'function') {
             const presets = pm.getAllPresets();
@@ -12772,20 +12812,20 @@ function buildSysprompt(rawText) {
 
         // Profiles / Presets
         const worldPresetSelect = $('#rpg_world_completion_preset');
-        if (ctx.ConnectionManagerRequestService?.handleDropdown) {
-            /** @type {any} */ (ctx.ConnectionManagerRequestService).handleDropdown(worldProfileSelect[0]);
-            worldProfileSelect.val(settings.worldConnectionProfileId || "");
-        } else {
+        if (!tryBindConnectionProfileDropdown('#rpg_world_connection_profile', settings.worldConnectionProfileId, (id) => {
+            settings.worldConnectionProfileId = id;
+            saveSettings();
+        })) {
             getConnectionProfiles().then(profiles => {
                 worldProfileSelect.empty().append('<option value="">-- No Profile Selected --</option>');
                 profiles.forEach(p => worldProfileSelect.append($('<option></option>').val(p).text(p)));
                 worldProfileSelect.val(settings.worldConnectionProfileId || "");
             });
+            worldProfileSelect.on('change', function () {
+                settings.worldConnectionProfileId = $(this).val();
+                saveSettings();
+            });
         }
-        worldProfileSelect.on('change', function () {
-            settings.worldConnectionProfileId = $(this).val();
-            saveSettings();
-        });
 
         if (pm && typeof pm.getAllPresets === 'function') {
             const presets = pm.getAllPresets();
@@ -13060,10 +13100,10 @@ function buildSysprompt(rawText) {
         });
 
         // Populate profiles using handleDropdown (fills real internal IDs, not names)
-        if (ctx.ConnectionManagerRequestService?.handleDropdown) {
-                /** @type {any} */ (ctx.ConnectionManagerRequestService).handleDropdown(profileSelect[0]);
-            profileSelect.val(settings.connectionProfileId);
-        } else {
+        if (!tryBindConnectionProfileDropdown('#rpg_tracker_connection_profile', settings.connectionProfileId, (id) => {
+            settings.connectionProfileId = id;
+            saveSettings();
+        })) {
             // Fallback for older ST: /profile-list returns names only
             const profiles = await getConnectionProfiles();
             profileSelect.empty().append('<option value="">-- No Profile Selected --</option>');
@@ -13071,11 +13111,11 @@ function buildSysprompt(rawText) {
                 profileSelect.append($('<option></option>').val(p).text(p));
             });
             profileSelect.val(settings.connectionProfileId);
+            profileSelect.on('change', function () {
+                settings.connectionProfileId = $(this).val();
+                saveSettings();
+            });
         }
-        profileSelect.on('change', function () {
-            settings.connectionProfileId = $(this).val();
-            saveSettings();
-        });
 
         // Populate presets
         const presetSelect = $('#rpg_tracker_completion_preset');
@@ -14561,20 +14601,20 @@ RULES:
 
         // Router Profiles & Presets Population
         const routerPresetSelect = $('#rpg_tracker_router_completion_preset');
-        if (ctx.ConnectionManagerRequestService?.handleDropdown) {
-                /** @type {any} */ (ctx.ConnectionManagerRequestService).handleDropdown(routerProfileSelect[0]);
-            routerProfileSelect.val(settings.routerConnectionProfileId || "");
-        } else {
+        if (!tryBindConnectionProfileDropdown('#rpg_tracker_router_connection_profile', settings.routerConnectionProfileId, (id) => {
+            settings.routerConnectionProfileId = id;
+            saveSettings();
+        })) {
             getConnectionProfiles().then(profiles => {
                 routerProfileSelect.empty().append('<option value="">-- No Profile Selected --</option>');
                 profiles.forEach(p => routerProfileSelect.append($('<option></option>').val(p).text(p)));
                 routerProfileSelect.val(settings.routerConnectionProfileId || "");
             });
+            routerProfileSelect.on('change', function () {
+                settings.routerConnectionProfileId = $(this).val();
+                saveSettings();
+            });
         }
-        routerProfileSelect.on('change', function () {
-            settings.routerConnectionProfileId = $(this).val();
-            saveSettings();
-        });
 
         if (pm && typeof pm.getAllPresets === 'function') {
             const presets = pm.getAllPresets();
