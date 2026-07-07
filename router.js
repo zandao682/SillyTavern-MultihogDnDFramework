@@ -1,4 +1,4 @@
-import { getSettings, getEffectiveRouterCampaignPrefix, persistWorldProgressionTimer, persistRouterLastRunWatermark, persistRouterLastRunTimestamp, getNpcRelationshipMax, clampRelationshipValue, buildRouterRelationshipInstruction } from './state-manager.js';
+import { getSettings, getEffectiveRouterCampaignPrefix, persistWorldProgressionTimer, persistRouterLastRunWatermark, persistRouterLastRunTimestamp, getNpcRelationshipMax, clampRelationshipValue, buildRouterRelationshipInstruction, sanitizeRouterState } from './state-manager.js';
 import { sendStateRequest, sendAgentTurn } from './llm-client.js';
 import { getRequestHeaders } from '../../../../script.js';
 import { extractCurrentTimeStr, cleanMessageContent, parseInWorldTime, formatInWorldTime, findNthUserMessageStartIdx, formatAgentChatLogFromIndex, sanitizeLorebookRecordContent } from './memo-processor.js';
@@ -1457,6 +1457,11 @@ async function applyAction(action, allBooks = {}, currentTime = '', breadcrumb =
     // 2. Update existing
     const updates = action.update || [];
     for (const up of updates) {
+        if (!up || typeof up !== 'object') continue;
+        if (typeof up.id !== 'string' || !up.id.includes('::')) {
+            errors.push(`Invalid update ID format: ${up ? up.id : 'undefined'}`);
+            continue;
+        }
         if (isSkeletonEntryId(up.id)) {
             errors.push(`Cannot update World Skeleton entry: ${up.id}`);
             continue;
@@ -1484,6 +1489,11 @@ async function applyAction(action, allBooks = {}, currentTime = '', breadcrumb =
     // 2b. Rewrite (full content replacement — no append, no dedup)
     const rewriteIds = [];
     for (const rw of (action.rewrite || [])) {
+        if (!rw || typeof rw !== 'object') continue;
+        if (typeof rw.id !== 'string' || !rw.id.includes('::')) {
+            errors.push(`Invalid rewrite ID format: ${rw ? rw.id : 'undefined'}`);
+            continue;
+        }
         if (isSkeletonEntryId(rw.id)) {
             errors.push(`Cannot rewrite World Skeleton entry: ${rw.id}`);
             continue;
@@ -1504,8 +1514,9 @@ async function applyAction(action, allBooks = {}, currentTime = '', breadcrumb =
     // 2c. Rename (label and/or keyword list update — no content change)
     const renameIds = [];
     for (const rn of (action.rename || [])) {
-        if (!rn.id || !rn.id.includes('::')) {
-            errors.push(`Invalid rename ID format: ${rn.id}`);
+        if (!rn || typeof rn !== 'object') continue;
+        if (typeof rn.id !== 'string' || !rn.id.includes('::')) {
+            errors.push(`Invalid rename ID format: ${rn ? rn.id : 'undefined'}`);
             continue;
         }
         if (isSkeletonEntryId(rn.id)) {
@@ -1528,6 +1539,11 @@ async function applyAction(action, allBooks = {}, currentTime = '', breadcrumb =
     // 2d. Consolidate (many-to-one merge with deletion)
     const consolidateIds = [];
     for (const op of (action.consolidate || [])) {
+        if (!op || typeof op !== 'object') continue;
+        if (typeof op.survivor !== 'string' || !op.survivor.includes('::')) {
+            errors.push(`Invalid survivor ID format: ${op ? op.survivor : 'undefined'}`);
+            continue;
+        }
         if (isSkeletonEntryId(op.survivor) || (op.targets || []).some(isSkeletonEntryId)) {
             errors.push('Cannot consolidate World Skeleton entries.');
             continue;
@@ -1548,6 +1564,7 @@ async function applyAction(action, allBooks = {}, currentTime = '', breadcrumb =
         // Delete each target and scrub from active/keyword key lists
         for (const targetId of (op.targets || [])) {
             if (targetId === op.survivor) continue; // Do not delete the survivor entry!
+            if (typeof targetId !== 'string' || !targetId.includes('::')) continue;
             const [tBook, tUid] = targetId.split('::');
             const tBookData = await ctx.loadWorldInfo(tBook);
             if (tBookData?.entries?.[tUid]) {
@@ -2452,6 +2469,7 @@ export async function getLorebookManifest(skipUpdate = false) {
     const settings = getSettings();
     const ctx = SillyTavern.getContext();
     const prefix = getLivePrefix();
+    sanitizeRouterState(settings);
     
     // Always flush ST's registry from disk first so books written via HTTP API are visible,
     // unless skipUpdate is explicitly requested for speed.

@@ -1692,3 +1692,58 @@ export function deleteProfile(name) {
     if (s.activeProfile === name) s.activeProfile = '';
     SillyTavern.getContext().saveSettingsDebounced();
 }
+
+/**
+ * Safely sanitizes router state arrays to prevent crashes from dirty/malformed data.
+ * @param {Record<string, any>} s - The settings object to sanitize.
+ */
+export function sanitizeRouterState(s) {
+    if (!s) return;
+    const isGoodId = (id) => typeof id === 'string' && id.includes('::');
+
+    if (Array.isArray(s.activeRouterKeys)) {
+        s.activeRouterKeys = s.activeRouterKeys.filter(isGoodId);
+    } else {
+        s.activeRouterKeys = [];
+    }
+
+    if (Array.isArray(s.activeWorldKeys)) {
+        s.activeWorldKeys = s.activeWorldKeys.filter(isGoodId);
+    } else {
+        s.activeWorldKeys = [];
+    }
+
+    if (Array.isArray(s.keywordActivatedKeys)) {
+        s.keywordActivatedKeys = s.keywordActivatedKeys.filter(isGoodId);
+    } else {
+        s.keywordActivatedKeys = [];
+    }
+
+    if (Array.isArray(s.routerLog)) {
+        s.routerLog = s.routerLog.filter(log => {
+            if (!log || typeof log !== 'object') return false;
+
+            if (Array.isArray(log.record)) {
+                log.record = log.record.filter(isGoodId);
+            } else {
+                log.record = [];
+            }
+
+            if (Array.isArray(log.activate)) {
+                log.activate = log.activate.filter(isGoodId);
+            } else {
+                log.activate = [];
+            }
+
+            if (Array.isArray(log.deactivate)) {
+                log.deactivate = log.deactivate.filter(isGoodId);
+            } else {
+                log.deactivate = [];
+            }
+
+            return true;
+        });
+    } else {
+        s.routerLog = [];
+    }
+}
