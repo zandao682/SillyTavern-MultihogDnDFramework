@@ -429,6 +429,11 @@ export function getSettings() {
         memoHistory: [],
         lastDelta: "",
         enabled: true,
+        // Campaign mode gate. 'dnd' (default) = existing behavior, untouched.
+        // 'modern' opts a chat into the generic System Definition layer. The live
+        // mirror here defaults to 'dnd'; per-chat truth lives in chatStates[id].campaignMode
+        // and is read via getCampaignMode(). Absent → treated as 'dnd' (safe migration).
+        campaignMode: 'dnd',
         trackerCollapsed: false,
         agentCollapsed: false,
         agentKeysCollapsed: false,
@@ -550,6 +555,12 @@ You may be asked to use Markers: ((PLS)), ((B)), ((XB)), ((BDG)), ((HGT)). These
         customSyspromptLibrary: [],
         profiles: {},
         activeProfile: "",
+        // System Library — GLOBAL, reusable System-Definition foundations (unlike
+        // per-chat chatStates[id].foundation). Each entry:
+        //   { id, name, description?, tags?, foundation, createdAt }
+        // Populated/applied by system-library.js; surfaced in settings + the panel.
+        systemLibrary: [],
+        activeSystemId: "",
         fullViewSections: [],
         blockOrder: ['COMBAT', 'CHARACTER', 'PARTY', 'INVENTORY', 'ABILITIES', 'SPELLS', 'XP', 'TIME'],
         legacyDiceNaming: false,
@@ -1549,11 +1560,36 @@ export function saveChatState(chatId) {
         // Preserve lorebook stack link — written by Link button and router, not by normal state saves
         campaignBooks: existing.campaignBooks || [],
 
-        // Preserve Player Character pseudo-persona which is injected into the chat state
+        // Campaign mode — set once at chat creation (like campaignBooks), preserved across
+        // normal state saves. Absent on legacy chats → coerced to 'dnd' by getCampaignMode().
+        campaignMode: existing.campaignMode || s.campaignMode || 'dnd',
+
+        // Generic System Definition state — written directly into chatStates by the
+        // foundation layer (commitFoundation) and the progression engine. Preserve
+        // them here like campaignBooks so a routine save never drops the committed
+        // foundation. Undefined for D&D chats (JSON-serialized away).
+        foundation:  existing.foundation,
+        progression: existing.progression,
+
+        // Preserve Player Character pseudo-persona which is injected into the chat state (from main)
         playerCharacter: existing.playerCharacter,
     };
     
     SillyTavern.getContext().saveSettingsDebounced();
+}
+
+/**
+ * The campaign mode for a chat: 'modern' only when explicitly opted in, else 'dnd'.
+ * Reads per-chat truth from chatStates; legacy/absent values coerce to 'dnd' so
+ * existing D&D chats are unaffected. This is the single gate the generic System
+ * Definition layer branches on.
+ * @param {string} chatId
+ * @returns {'dnd'|'modern'}
+ */
+export function getCampaignMode(chatId) {
+    if (!chatId) return 'dnd';
+    const s = getSettings();
+    return s.chatStates?.[chatId]?.campaignMode === 'modern' ? 'modern' : 'dnd';
 }
 
 // ── Profile I/O ───────────────────────────────────────────────────────────────

@@ -376,6 +376,21 @@
                     </div>
 
                     <hr>
+                    <b>System Library</b>
+                    <small style="display:block;opacity:0.7;margin:2px 0 4px;">Reusable game systems (Modern mode). Apply one to this chat, or export/import to share.</small>
+                    <select id="rpg_tracker_system_select" class="text_pole"></select>
+                    <div class="flex-container gap-1" style="margin-top: 4px;">
+                        <button id="rpg_tracker_system_save" class="menu_button interactable" style="flex: 1;" title="Save this chat's committed system to the library">Save current</button>
+                        <button id="rpg_tracker_system_apply" class="menu_button interactable" style="flex: 1;" title="Apply the selected system to this chat (locks Modern mode)">Apply</button>
+                        <button id="rpg_tracker_system_delete" class="menu_button interactable" style="flex: 1; color: #ff5555;" title="Delete selected system">Delete</button>
+                    </div>
+                    <div class="flex-container gap-1" style="margin-top: 4px;">
+                        <button id="rpg_tracker_system_export" class="menu_button interactable" style="flex: 1;" title="Download the selected system as a JSON file">Export</button>
+                        <button id="rpg_tracker_system_import" class="menu_button interactable" style="flex: 1;" title="Import a system from a JSON file">Import</button>
+                    </div>
+                    <input type="file" id="rpg_tracker_system_import_file" accept="application/json,.json" style="display:none;">
+
+                    <hr>
                     <b>Core Instruction</b>
                     <textarea id="rpg_tracker_core_prompt" class="text_pole autoSetHeight" rows="4"></textarea>
                     <b style="margin-top: 8px; display: inline-block;">User Prompt Suffix</b>

@@ -1,0 +1,169 @@
+/* skilltree.css — Skill Tree tab (generic System Definition mode).
+   Ported from the Fatbody Framework (same author, MIT).
+   Theme variables are overridden at runtime from the opener's snapshot;
+   the values here are the standalone fallbacks. */
+
+:root {
+    --rt-accent: #3498db;
+    --rt-accent-bg: rgba(52, 152, 219, 0.18);
+    --rt-accent-dim: rgba(52, 152, 219, 0.45);
+    --SmartThemeBodyColor: #e0e0e8;
+    --SmartThemeBlurTintColor: #14141e;
+    --SmartThemeBorderColor: rgba(255, 255, 255, 0.12);
+}
+
+* { box-sizing: border-box; }
+
+/* Authoritative [hidden] handling: author display rules on specific elements
+   must never resurrect a hidden element (see #st-empty regression). */
+[hidden] { display: none !important; }
+
+html, body {
+    margin: 0;
+    height: 100%;
+    background: radial-gradient(ellipse at center, color-mix(in srgb, var(--SmartThemeBlurTintColor) 88%, var(--rt-accent)) 0%, var(--SmartThemeBlurTintColor) 75%);
+    color: var(--SmartThemeBodyColor);
+    font-family: "Segoe UI", system-ui, sans-serif;
+    overflow: hidden;
+}
+
+/* ── Header ── */
+#st-header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    background: color-mix(in srgb, var(--SmartThemeBlurTintColor) 85%, black);
+    border-bottom: 1px solid var(--SmartThemeBorderColor);
+    flex-wrap: wrap;
+}
+.st-title { font-weight: bold; color: var(--rt-accent); white-space: nowrap; }
+#st-search {
+    flex: 1;
+    min-width: 140px;
+    max-width: 280px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    background: rgba(0, 0, 0, 0.35);
+    color: inherit;
+}
+.st-counters { display: flex; gap: 6px; }
+.st-chip {
+    padding: 3px 10px;
+    border-radius: 12px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    background: rgba(0, 0, 0, 0.3);
+    font-size: 0.85em;
+    white-space: nowrap;
+}
+.st-chip-staged { border-color: #f1c40f; color: #f1c40f; }
+.st-chip-respec { border-color: #e67e22; color: #e67e22; }
+.st-conn-ok { border-color: #00c88c; color: #00c88c; }
+.st-conn-bad { border-color: #ff5555; color: #ff5555; }
+.st-actions { display: flex; gap: 6px; }
+.st-actions button {
+    padding: 5px 14px;
+    border-radius: 6px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    background: var(--rt-accent-bg);
+    color: inherit;
+    cursor: pointer;
+}
+.st-actions button:disabled { opacity: 0.4; cursor: default; }
+#st-apply:not(:disabled) { border-color: #00c88c; background: rgba(0, 200, 140, 0.2); }
+#st-reset { border-color: #e74c3c; background: rgba(231, 76, 60, 0.12); }
+
+/* ── Canvas ── */
+#st-canvas-wrap { position: absolute; inset: 0; }
+#st-canvas { width: 100%; height: 100%; cursor: grab; touch-action: none; }
+#st-canvas.st-panning { cursor: grabbing; }
+
+/* edges */
+.st-edge { stroke: color-mix(in srgb, var(--rt-accent-dim) 55%, transparent); stroke-width: 2; }
+.st-edge.st-edge-owned { stroke: var(--rt-accent); stroke-width: 3; }
+.st-edge.st-edge-dim { opacity: 0.15; }
+
+/* nodes */
+.st-node { cursor: pointer; }
+.st-node circle.st-core {
+    fill: #1c1c28;
+    stroke: rgba(255, 255, 255, 0.25);
+    stroke-width: 2;
+    transition: stroke 0.15s, fill 0.15s;
+}
+.st-node.st-locked { opacity: 0.45; }
+.st-node.st-locked circle.st-core { stroke-dasharray: 3 3; }
+.st-node.st-affordable circle.st-core { stroke: var(--rt-accent); }
+.st-node.st-affordable:hover circle.st-core { fill: var(--rt-accent-bg); }
+.st-node.st-staged circle.st-core { stroke: #f1c40f; fill: rgba(241, 196, 15, 0.18); }
+.st-node.st-acquired circle.st-core { stroke: #00c88c; fill: rgba(0, 200, 140, 0.22); }
+.st-node.st-refund circle.st-core { stroke: #e74c3c; fill: rgba(231, 76, 60, 0.20); stroke-dasharray: 4 3; }
+.st-node.st-dim { opacity: 0.12; }
+.st-node.st-match circle.st-core { stroke-width: 4; }
+.st-node text.st-label {
+    fill: var(--SmartThemeBodyColor);
+    font-size: 11px;
+    text-anchor: middle;
+    pointer-events: none;
+    paint-order: stroke;
+    stroke: rgba(0, 0, 0, 0.85);
+    stroke-width: 3px;
+}
+.st-node text.st-glyph {
+    font-size: 14px;
+    text-anchor: middle;
+    dominant-baseline: central;
+    pointer-events: none;
+}
+
+/* ── Tooltip ── */
+#st-tooltip {
+    position: fixed;
+    z-index: 20;
+    max-width: 320px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    background: color-mix(in srgb, var(--SmartThemeBlurTintColor) 92%, black);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+    font-size: 0.85em;
+    line-height: 1.45;
+    pointer-events: none;
+}
+#st-tooltip .tt-name { font-weight: bold; margin-bottom: 2px; }
+#st-tooltip .tt-meta { opacity: 0.75; font-size: 0.9em; margin-bottom: 6px; }
+#st-tooltip .tt-effect { margin-bottom: 6px; }
+#st-tooltip .tt-desc { font-style: italic; opacity: 0.9; border-left: 2px solid var(--rt-accent-dim); padding-left: 8px; }
+#st-tooltip .tt-req { color: #e67e22; margin-top: 6px; }
+
+/* ── Empty state & banner ── */
+#st-empty {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    opacity: 0.65;
+    /* Overlay sits over the whole canvas — it must never swallow node clicks
+       or pan/zoom, and the author display rule must yield to [hidden]. */
+    pointer-events: none;
+}
+#st-empty[hidden] { display: none; }
+#st-banner {
+    position: fixed;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 30;
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: 1px solid #ff5555;
+    background: rgba(120, 20, 20, 0.85);
+    color: #ffdddd;
+}

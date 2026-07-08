@@ -9,6 +9,9 @@ import { initializeDebugViewer, toggleDebugViewer } from './debug-viewer.js';
 import { runRouterPass, rollbackRouterPass, reapplyRouterPass, getLorebookManifest, deleteLorebookEntry, updateLorebookEntry, disableManagedEntries, isRouterRunning, stopRouterPass } from './router.js';
 import { getRequestHeaders } from '../../../../script.js';
 import { fileToDataUrl, scaleImageTo512Square, applyPortraitData, generatePortraitPrompt, generateNpcPortraitPrompt, showPortraitPromptPopup, generatePortraitDirect, autoGeneratePartyPortraits, removeAllPortraits, checkAndTriggerAutoGenerations, autoGenerateEnemyPortraits, forceCheckAutoGenerations, resetAutoGenerationTracking } from './portraits.js';
+import { buildSysprompt, resolveModernSysprompt } from './sysprompt.js';
+import { recordPass as recordTelemetryPass } from './token-telemetry.js';
+import { registerSystemDefCommands } from './system-def-commands.js';
 
 export const RENDERING_TAGS_LIBRARY = [
     'Health: ((BAR)) 50/100',
@@ -2494,6 +2497,19 @@ async function runStateModelPass(narrativeOutput, isFullContext = false, overrid
 
             const result = await sendStateRequest(settings, systemPrompt, userPrompt);
 
+            // Cost telemetry (debug-gated): record the 2nd-pass extractor call's
+            // token cost so the dual-LLM overhead can be measured. Never throws.
+            if (settings.telemetryEnabled || settings.debugMode) {
+                try {
+                    recordTelemetryPass({
+                        chatId: SillyTavern.getContext().chatId || '_',
+                        kind: 'extractor',
+                        promptText: `${systemPrompt}\n${userPrompt}`,
+                        outputText: typeof result === 'string' ? result : '',
+                    });
+                } catch (_) { /* telemetry must never break a turn */ }
+            }
+
             if (result && typeof result === 'string') {
                 if (settings.debugMode) console.log(`[RPG Tracker] Raw Result (Chunk ${i + 1}):`, result);
 
@@ -2555,6 +2571,12 @@ globalThis._rpgCurrentChatId = () => _currentChatId;
 globalThis._rpgResetRouterAutoTick = resetRouterAutoTick;
 // Expose live prefix derivation for any module that needs the current prefix.
 globalThis._rpgGetCurrentPrefix = () => getEffectiveRouterCampaignPrefix(SillyTavern.getContext().chatId || '');
+// Re-apply the narrator sysprompt on demand (used by the System Definition layer
+// after a foundation is committed, so the Modern prompt takes effect immediately).
+globalThis._rpgAutoApplySysprompt = (force) => autoApplySysprompt(force);
+// Exposed for the Skill Tree bridge (passive application) and rendered-view refresh.
+globalThis._rpgSendDirectPrompt = (message) => sendDirectPrompt(message);
+globalThis._rpgRefreshRenderedView = () => { if (typeof refreshRenderedView === 'function') refreshRenderedView(); };
 globalThis._rpgUpdateUIMemo = (text) => {
     if (typeof updateUIMemo === 'function') updateUIMemo(text);
     if (typeof syncMemoView === 'function') syncMemoView();
@@ -3612,6 +3634,83 @@ function refreshProfileDropdown() {
     const names = Object.keys(s.profiles || {});
     sel.innerHTML = '<option value="">-- No Profile --</option>' +
         names.map(n => `<option value="${escapeHtml(n)}"${n === s.activeProfile ? ' selected' : ''}>${escapeHtml(n)}</option>`).join('');
+}
+
+/** Populate the System Library dropdown from the global systemLibrary. */
+function refreshSystemDropdown() {
+    const s = getSettings();
+    const sel = document.getElementById('rpg_tracker_system_select');
+    if (!sel) return;
+    const lib = Array.isArray(s.systemLibrary) ? s.systemLibrary : [];
+    sel.innerHTML = '<option value="">-- No System --</option>' +
+        lib.map(e => `<option value="${escapeHtml(e.id)}"${e.id === s.activeSystemId ? ' selected' : ''}>${escapeHtml(e.name)}</option>`).join('');
+}
+
+/**
+ * Small floating menu anchored to the panel's 📚 button: build a new system,
+ * open the skill tree (Modern chats), or apply a saved library system.
+ * Self-contained; the generic layer (wizard/skilltree/library) is lazy-imported.
+ * @param {HTMLElement} anchor
+ */
+function openSystemQuickMenu(anchor) {
+    document.getElementById('rt-system-menu')?.remove();
+    const s = getSettings();
+    const chatId = SillyTavern.getContext().chatId || _currentChatId || '';
+    const lib = Array.isArray(s.systemLibrary) ? s.systemLibrary : [];
+    const isModern = !!chatId && s.chatStates?.[chatId]?.campaignMode === 'modern';
+
+    const menu = document.createElement('div');
+    menu.id = 'rt-system-menu';
+    menu.style.cssText = 'position:fixed;z-index:12000;min-width:220px;max-height:60vh;overflow:auto;background:var(--SmartThemeBlurTintColor,#1a1a2a);border:1px solid var(--SmartThemeBorderColor,rgba(255,255,255,0.2));border-radius:8px;box-shadow:0 8px 28px rgba(0,0,0,0.5);padding:4px;font-size:0.9em;';
+
+    const item = (label, title, onClick) => {
+        const el = document.createElement('div');
+        el.textContent = label;
+        if (title) el.title = title;
+        el.style.cssText = 'padding:6px 10px;border-radius:5px;cursor:pointer;white-space:nowrap;';
+        el.addEventListener('mouseenter', () => { el.style.background = 'rgba(255,255,255,0.08)'; });
+        el.addEventListener('mouseleave', () => { el.style.background = ''; });
+        el.addEventListener('click', async () => { menu.remove(); try { await onClick(); } catch (err) { console.error('[System Library]', err); } });
+        menu.appendChild(el);
+    };
+    const head = (t) => { const h = document.createElement('div'); h.textContent = t; h.style.cssText = 'padding:4px 10px;opacity:0.6;font-size:0.85em;'; menu.appendChild(h); };
+    const sep = () => { const h = document.createElement('div'); h.style.cssText = 'border-top:1px solid rgba(255,255,255,0.12);margin:4px 0;'; menu.appendChild(h); };
+
+    head('Build / manage');
+    item('🏗️ Build new system…', 'Open the Foundation Builder', async () => {
+        const { openFoundationWizard } = await import('./foundation-wizard.js');
+        openFoundationWizard();
+    });
+    if (isModern) {
+        item('🌳 Open Skill Tree', 'Open the skill tree for this campaign', async () => {
+            const { openSkillTreeTab } = await import('./skilltree-bridge.js');
+            openSkillTreeTab();
+        });
+    }
+    sep();
+    head(lib.length ? 'Apply a saved system' : 'Library is empty — build one');
+    for (const e of lib) {
+        item(`📚 ${e.name}`, e.description || '', async () => {
+            const { applySystemFromLibrary } = await import('./system-library.js');
+            await applySystemFromLibrary(e.id, chatId);
+        });
+    }
+
+    document.body.appendChild(menu);
+    const r = anchor.getBoundingClientRect();
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - menu.offsetWidth - 8));
+    let top = r.bottom + 4;
+    if (top + menu.offsetHeight > window.innerHeight - 8) top = Math.max(8, r.top - menu.offsetHeight - 4);
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+
+    const closer = (ev) => {
+        if (!menu.contains(ev.target) && ev.target !== anchor) {
+            menu.remove();
+            document.removeEventListener('mousedown', closer);
+        }
+    };
+    setTimeout(() => document.addEventListener('mousedown', closer), 0);
 }
 
 async function showRngExplanation() {
@@ -4860,6 +4959,7 @@ function createPanel() {
                     <button class="rpg-tracker-icon-btn" id="rpg-tracker-update-btn" title="Update State Now">🔄</button>
                     <button class="rpg-tracker-icon-btn" id="rpg-tracker-pause-btn" title="Pause Tracker">⏸</button>
                     <button class="rpg-tracker-icon-btn" id="rpg-tracker-portraits-menu-btn" title="AI Portrait Actions">🖼️</button>
+                    <button class="rpg-tracker-icon-btn" id="rpg-tracker-system-btn" title="System Library — build or apply a game system">📚</button>
                     <button class="rpg-tracker-icon-btn" id="rpg-tracker-debug-btn" title="Context Debugger" style="display:none;">🛠️</button>
                     <button class="rpg-tracker-icon-btn rt-overflow-trigger" id="rt-overflow-btn" title="More actions">⋯</button>
                     <button class="rpg-tracker-icon-btn" id="rpg-tracker-collapse-btn" title="Collapse Panel"><i class="fa-solid ${settings.trackerCollapsed ? 'fa-chevron-down' : 'fa-chevron-up'}"></i></button>
@@ -9819,6 +9919,13 @@ Rules:
         toggleDebugViewer();
     });
 
+    // System Library quick menu (📚) — non-intrusive: a small popup menu to build
+    // a new system, apply a saved one, or open the skill tree. Inert for D&D users.
+    panel.querySelector('#rpg-tracker-system-btn')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openSystemQuickMenu(/** @type {HTMLElement} */ (e.currentTarget));
+    });
+
     // Direct prompt toggle
     panel.querySelector('#rpg-tracker-prompt-btn').addEventListener('click', (e) => {
         const btn = /** @type {HTMLElement} */ (e.currentTarget);
@@ -11623,6 +11730,9 @@ async function autoApplySysprompt(force = false) {
     if (!content) return;
 
     content = buildSysprompt(content);
+    // Generic System Definition mode: override with the Modern prompt when the
+    // chat has opted in (returns null otherwise — D&D content stands).
+    { const __modern = await resolveModernSysprompt(); if (__modern) content = __modern; }
     const mainTextarea = /** @type {HTMLTextAreaElement|null} */ (document.getElementById('main_prompt_quick_edit_textarea'));
     if (mainTextarea) {
         mainTextarea.value = content;
@@ -11637,100 +11747,8 @@ function scheduleAutoApply() {
     _autoApplyTimer = setTimeout(() => { _autoApplyTimer = null; autoApplySysprompt(); }, 400);
 }
 
-function buildSysprompt(rawText) {
-    if (!rawText) return "";
-    const s = getSettings();
-    const mods = s.syspromptModules || {};
-
-    // 1. Tag-based module stripping and Quest mode swap
-    let content = rawText
-        .replace(/<(\w[\w_-]*)>([\s\S]*?)<\/\1>/g, (match, tag) => {
-            if (mods[tag] === false) return '';
-            if (tag === 'relationship_tracking') {
-                if (!s.npcRelationshipBars) return '';
-                return `<relationship_tracking>\n${buildRelationshipTrackingSysprompt(getNpcRelationshipMax(s))}\n</relationship_tracking>`;
-            }
-            if (tag === 'rng_system' && !s.rngEnabled) {
-                const contentOnly = match.replace(/<\/?rng_system>/g, '');
-                let fallbackText = "To resolve actions, simulate a fair d20 roll internally and maintain all ROLL FORMAT rules.\n\n";
-                let matchedFormat = false;
-                if (contentOnly.includes('[ROLL FORMAT]')) {
-                    const rollFormatMatch = contentOnly.match(/(\[ROLL FORMAT\][\s\S]*?)(?=\n\n\[FALLBACK\]|$)/i);
-                    if (rollFormatMatch) {
-                        fallbackText += rollFormatMatch[1].trim();
-                        matchedFormat = true;
-                    }
-                } else {
-                    const l4 = contentOnly.match(/4\.\s*(Output[\s\S]*?)(?=\n\n\[FALLBACK\]|$)/i);
-                    if (l4) {
-                        fallbackText += l4[1].replace(/5\.\s*/g, '').trim();
-                        matchedFormat = true;
-                    }
-                }
-                if (!matchedFormat) {
-                    fallbackText += "Output rolls as `[ROLL: 1d20+Mod vs DC X (Result: Y) -> Outcome]` or `[ROLL: 1d20+Mod (Result: Y) -> Outcome]`.";
-                }
-                return `<rng_system>\n${fallbackText.trim()}\n</rng_system>`;
-            }
-            // Inject correct instructions for quests based on legacy mode
-            if (tag === 'quests') {
-                let instruction = QUESTS_NARRATOR;
-                // Strip Mood guidance if Frustration is off
-                if (!mods.questsFrustration) {
-                    instruction = instruction.replace(/Use the MOOD field.*?\./g, '');
-                }
-                // Strip Difficulty guidance if Difficulty is off
-                if (!mods.questsDifficulty) {
-                    instruction = instruction.replace(/the difficulty \(Very Easy to Very Hard\), /g, '');
-                    instruction = instruction.replace(/Assign an appropriate difficulty \(Very Easy to Very Hard\) based on the narrative stakes\. /g, '');
-                }
-                return `<quests>\n${instruction.trim()}\n</quests>`;
-            }
-            if (tag === 'end_of_output_footer') {
-                let footerContent = match;
-                if (s.use24hTime) {
-                    footerContent = footerContent.replace(/\[HH:MM AM\/PM\]/g, '[HH:MM] (24-hour clock, NO AM/PM)');
-                }
-                if (s.useDdMmYyFormat) {
-                    footerContent = footerContent.replace(/Day\s+\[X\]/g, '[DD/MM/YYYY]');
-                }
-                return footerContent;
-            }
-            return match;
-        });
-
-    // 2. Inject current module instructions
-    const modulesText = buildModulesInstructionText(s);
-    content = content.replace("{{modulesText}}", modulesText);
-
-    // 3. Handle Quests Hardcore rules stripping (Narrator guidance)
-    if (!mods.questsDeadlines) {
-        // Strip deadline assignment rule and auto_fail guidance
-        content = content.replace(/- Assign an in-world Deadline.*\n/g, '');
-        content = content.replace(/- Set auto_fail to true for quests.*\n/g, '');
-        content = content.replace(/- If a duration is given.* Day N.*\n/g, '');
-    }
-    if (!mods.questsFrustration) {
-        // Strip frustration coefficient and mood rules
-        content = content.replace(/- Set a frustration_coefficient.*\n/g, '');
-        content = content.replace(/ {2}· 0\.4 = Very patient.*\n/g, '');
-        content = content.replace(/ {2}· 1\.0 = Normal.*\n/g, '');
-        content = content.replace(/ {2}· 3\.0 = Volatile.*\n/g, '');
-        content = content.replace(/- The NPC Mood evolves continuously.*\n/g, '');
-        // Also strip the 'past deadline' override rule — only applies when Frustration is active
-        content = content.replace(/- If a quest is time-sensitive and the deadline passes.*\n/g, '');
-    }
-
-    if (!s.rngEnabled) {
-        content = content
-            .replace(/.*RollTheDice.*\n?/gi, '')
-            .replace(/.*RNG_QUEUE v6.0_PROPER.*\n?/gi, '');
-    }
-
-    return content
-        .replace(/\n{3,}/g, "\n\n")
-        .trim();
-}
+// buildSysprompt() was extracted to ./sysprompt.js (Phase 1 modularization);
+// it is imported at the top of this file.
 
 /**
  * Binds a Connection Manager profile dropdown when the element and extension are available.
@@ -12444,6 +12462,7 @@ function tryBindConnectionProfileDropdown(selector, initialProfileId, onProfileI
 
         registerDiceFunctionTool();
         registerDiceSlashCommand();
+        try { registerSystemDefCommands(); } catch (e) { console.warn('[Multihog Framework] registerSystemDefCommands failed:', e); }
 
         // ─── Quest System ───
         import('./quests.js').then(({ unregisterLogQuestTool, installQuestDebugTools, computeFrustration }) => {
@@ -13535,6 +13554,10 @@ RULES:
 
             content = buildSysprompt(content);
 
+            // Generic System Definition mode: override with the Modern prompt when the
+            // chat has opted in (returns null otherwise — D&D content stands).
+            { const __modern = await resolveModernSysprompt(); if (__modern) content = __modern; }
+
             const mainTextarea = /** @type {HTMLTextAreaElement} */ (document.getElementById('main_prompt_quick_edit_textarea'));
             if (mainTextarea) {
                 mainTextarea.value = content;
@@ -14130,6 +14153,10 @@ RULES:
             }
 
             content = buildSysprompt(content);
+
+            // Generic System Definition mode: override with the Modern prompt when the
+            // chat has opted in (returns null otherwise — D&D content stands).
+            { const __modern = await resolveModernSysprompt(); if (__modern) content = __modern; }
 
             const mainTextarea = /** @type {HTMLTextAreaElement} */ (document.getElementById('main_prompt_quick_edit_textarea'));
             if (mainTextarea) {
@@ -15642,6 +15669,63 @@ RULES:
             toastr['success'](`Profile "${name}" deleted.`, 'RPG Tracker');
         });
 
+        // ── System Library (reusable game systems) ──
+        refreshSystemDropdown();
+        const _sysSel = () => /** @type {HTMLSelectElement} */ (document.getElementById('rpg_tracker_system_select'));
+        const _sysChatId = () => SillyTavern.getContext().chatId || _currentChatId || '';
+
+        $('#rpg_tracker_system_save').on('click', async function () {
+            const f = getSettings().chatStates?.[_sysChatId()]?.foundation;
+            if (!f) return toastr['info']('This chat has no committed system yet — build one first (📚 → Build new, or /sysdef build).', 'System Library');
+            const { Popup } = SillyTavern.getContext();
+            let name = f.SETTING?.name || 'My System';
+            name = Popup?.show?.input ? await Popup.show.input('Save System', 'Save current system as:', name) : prompt('Save system as:', name);
+            name = name?.trim(); if (!name) return;
+            const { saveSystemToLibrary } = await import('./system-library.js');
+            saveSystemToLibrary(name, f);
+            refreshSystemDropdown();
+            toastr['success'](`System "${name}" saved to the library.`, 'System Library');
+        });
+
+        $('#rpg_tracker_system_apply').on('click', async function () {
+            const id = _sysSel()?.value;
+            if (!id) return toastr['info']('Select a system to apply.', 'System Library');
+            const { applySystemFromLibrary } = await import('./system-library.js');
+            await applySystemFromLibrary(id, _sysChatId());
+            refreshSystemDropdown();
+        });
+
+        $('#rpg_tracker_system_delete').on('click', async function () {
+            const id = _sysSel()?.value;
+            if (!id) return toastr['info']('Select a system to delete.', 'System Library');
+            const { Popup, POPUP_RESULT } = SillyTavern.getContext();
+            if (Popup?.show?.confirm) { const r = await Popup.show.confirm('Delete System', `Delete "${id}" from the library?`); if (r !== POPUP_RESULT.AFFIRMATIVE) return; }
+            else if (!confirm(`Delete "${id}"?`)) return;
+            const { deleteSystemFromLibrary } = await import('./system-library.js');
+            deleteSystemFromLibrary(id);
+            refreshSystemDropdown();
+            toastr['success']('System deleted.', 'System Library');
+        });
+
+        $('#rpg_tracker_system_export').on('click', async function () {
+            const id = _sysSel()?.value;
+            if (!id) return toastr['info']('Select a system to export.', 'System Library');
+            const { exportSystem } = await import('./system-library.js');
+            exportSystem(id);
+        });
+
+        $('#rpg_tracker_system_import').on('click', function () {
+            document.getElementById('rpg_tracker_system_import_file')?.click();
+        });
+        $('#rpg_tracker_system_import_file').on('change', async function (e) {
+            const file = e.target.files?.[0]; if (!file) return;
+            const text = await file.text();
+            e.target.value = '';
+            const { importSystem } = await import('./system-library.js');
+            const res = await importSystem(text);
+            if (res.ok) refreshSystemDropdown();
+        });
+
     } catch (e) {
         console.error("[RPG Tracker] Failed to build settings UI", e);
     }
@@ -15691,6 +15775,30 @@ RULES:
         });
 
         wandContainer.appendChild(btn);
+
+        // Generic System Definition builder — opens the Foundation Builder wizard
+        // (the same entry point as /sysdef build). Lazily imported so a plain D&D
+        // session never parses the generic layer until the button is used.
+        if (!document.getElementById('rpg_system_definer_wand_button')) {
+            const sdBtn = document.createElement('div');
+            sdBtn.id = 'rpg_system_definer_wand_button';
+            sdBtn.classList.add('list-group-item', 'flex-container', 'flexGap5');
+            sdBtn.title = 'Design a custom RPG system (any genre, leveled or levelless) — /sysdef build';
+            sdBtn.innerHTML = `
+                <div class="fa-solid fa-hammer extensionsMenuExtensionButton"></div>
+                <span>System Definition (Build RPG)</span>
+            `;
+            sdBtn.addEventListener('click', async () => {
+                try {
+                    const { openFoundationWizard } = await import('./foundation-wizard.js');
+                    openFoundationWizard();
+                } catch (e) {
+                    console.error('[Multihog Framework] Could not open the System Definition builder:', e);
+                    toastr['error']('Could not open the System Definition builder.', 'System Definition');
+                }
+            });
+            wandContainer.appendChild(sdBtn);
+        }
     }
 
     // ── Debug harness (safe to leave in — only runs when called manually) ──

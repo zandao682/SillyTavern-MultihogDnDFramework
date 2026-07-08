@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skill Tree — Multihog Framework</title>
+<link rel="stylesheet" href="skilltree.css">
+</head>
+<body>
+    <header id="st-header">
+        <div class="st-title">🌳 <span id="st-campaign-name">Skill Tree</span></div>
+        <input id="st-search" type="search" placeholder="Search skills…" autocomplete="off">
+        <div class="st-counters">
+            <span id="st-points" class="st-chip" title="Unspent skill points (after staged changes)">— pts</span>
+            <span id="st-staged" class="st-chip st-chip-staged" title="Staged allocations / refunds" hidden>staged</span>
+            <span id="st-respec" class="st-chip st-chip-respec" title="Currency cost of staged refunds" hidden>respec</span>
+        </div>
+        <div class="st-actions">
+            <button id="st-apply" disabled>Apply</button>
+            <button id="st-cancel" disabled>Cancel</button>
+            <button id="st-reset" title="Refund every acquired skill (respec costs apply)">Reset All</button>
+        </div>
+        <span id="st-conn" class="st-chip st-conn-ok" title="Connection to the SillyTavern tab">● live</span>
+    </header>
+
+    <main id="st-canvas-wrap">
+        <svg id="st-canvas" xmlns="http://www.w3.org/2000/svg">
+            <g id="st-viewport">
+                <g id="st-edges"></g>
+                <g id="st-nodes"></g>
+            </g>
+        </svg>
+        <div id="st-tooltip" hidden></div>
+        <div id="st-empty" hidden>
+            <h2>No skills forged yet</h2>
+            <p>Pick a class in the tracker (or wait for the Skill Forge) and this constellation will fill in.</p>
+        </div>
+        <div id="st-banner" hidden>⚠ Connection to SillyTavern lost — read-only. Reopen the tree from the tracker to reconnect.</div>
+    </main>
+
+    <script type="module" src="skilltree.js"></script>
+</body>
+</html>
