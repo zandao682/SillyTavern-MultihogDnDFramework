@@ -2331,6 +2331,7 @@ async function runStateModelPass(narrativeOutput, isFullContext = false, overrid
 
         const modulesText = buildModulesInstructionText(settings);
         let systemPrompt = settings.systemPromptTemplate.replace('{{modulesText}}', modulesText);
+        systemPrompt += await _skillExtractorInstructions();
         if (settings.useDdMmYyFormat) {
             systemPrompt = systemPrompt
                 .replace(/\[Day\s+X,\s+HH:MM\]/g, '[DD/MM/YYYY, HH:MM]')
@@ -3329,6 +3330,7 @@ async function sendDirectPrompt(message) {
 
         const modulesText = buildModulesInstructionText(settings);
         let systemPrompt = settings.systemPromptTemplate.replace('{{modulesText}}', modulesText);
+        systemPrompt += await _skillExtractorInstructions();
         if (settings.useDdMmYyFormat) {
             systemPrompt = systemPrompt
                 .replace(/\[Day\s+X,\s+HH:MM\]/g, '[DD/MM/YYYY, HH:MM]')
@@ -3644,6 +3646,26 @@ function refreshSystemDropdown() {
     const lib = Array.isArray(s.systemLibrary) ? s.systemLibrary : [];
     sel.innerHTML = '<option value="">-- No System --</option>' +
         lib.map(e => `<option value="${escapeHtml(e.id)}"${e.id === s.activeSystemId ? ' selected' : ''}>${escapeHtml(e.name)}</option>`).join('');
+}
+
+/**
+ * Extractor-side skill-model instructions for the current chat: describes each
+ * skill group's memo block so the 2nd-pass state model keeps them current.
+ * Returns '' unless the chat is Modern with a SKILL_MODEL — inert for D&D and
+ * for the default single skill tree. Lazy-loads the generic layer.
+ * @returns {Promise<string>}
+ */
+async function _skillExtractorInstructions() {
+    try {
+        const chatId = SillyTavern.getContext().chatId || _currentChatId || '';
+        if (!chatId) return '';
+        const st = getSettings().chatStates?.[chatId];
+        if (st?.campaignMode !== 'modern' || !st?.foundation?.SKILL_MODEL) return '';
+        const { skillExtractorInstructions } = await import('./skill-model.js');
+        return await skillExtractorInstructions(st.foundation);
+    } catch (_) {
+        return '';
+    }
 }
 
 /**

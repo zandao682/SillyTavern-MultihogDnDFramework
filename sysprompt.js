@@ -160,6 +160,14 @@ export async function resolveModernSysprompt() {
             content = content.split(`{{${k}}}`).join(v);
         }
         content = stripDisabledTags(content, getSettings().syspromptModules || {});
+
+        // Append skill-model narrator fragments (capabilities/leveling rules per group).
+        try {
+            const { skillSyspromptFragments } = await import('./skill-model.js');
+            const frags = await skillSyspromptFragments(foundation);
+            if (frags) content += '\n\n' + frags;
+        } catch (_) { /* skill fragments are optional */ }
+
         return content.replace(/\n{3,}/g, '\n\n').trim();
     } catch (e) {
         console.error('[Multihog Framework] Modern sysprompt resolve failed; keeping D&D:', e);

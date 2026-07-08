@@ -278,6 +278,29 @@ export function validateFoundation(f) {
         }
     }
 
+    // SKILL_MODEL: optional, multi-group skill/capability system. Each group is
+    // governed by one strategy ('skilltree' | 'capabilities' | 'leveling') and a
+    // character holds state across all groups at once (e.g. Veridia's level-on-use
+    // skills + non-leveling capabilities together). Absent → today's implicit single
+    // skilltree (backward-compatible). Strategy modules do deep per-config checks;
+    // here we validate shape, unique ids, and known models.
+    if (f.SKILL_MODEL !== undefined) {
+        const sm = f.SKILL_MODEL;
+        const KNOWN_MODELS = ['skilltree', 'capabilities', 'leveling'];
+        if (!sm || typeof sm !== 'object' || isArr(sm)) err('SKILL_MODEL must be an object when provided');
+        else if (!isArr(sm.groups) || sm.groups.length < 1) err('SKILL_MODEL.groups must be a non-empty array');
+        else {
+            const gids = new Set();
+            sm.groups.forEach((g, i) => {
+                if (!isStr(g?.id)) err(`SKILL_MODEL.groups[${i}].id must be a non-empty string`);
+                else if (gids.has(g.id)) err(`SKILL_MODEL.groups duplicate id "${g.id}"`);
+                else gids.add(g.id);
+                if (!KNOWN_MODELS.includes(g?.model)) err(`SKILL_MODEL.groups[${i}].model must be one of: ${KNOWN_MODELS.join(', ')}`);
+                if (g?.config !== undefined && (typeof g.config !== 'object' || isArr(g.config))) err(`SKILL_MODEL.groups[${i}].config must be an object`);
+            });
+        }
+    }
+
     return { ok: errors.length === 0, errors };
 }
 
